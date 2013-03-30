@@ -49,8 +49,6 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		self::EVENT_AFTER_DELETE
 	);
 	
-	public static $fields = array();
-	
 	protected static $config = array(
 		'extensions'	=> array()
 	);
@@ -58,24 +56,26 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	protected static $extension_methods	= array();
 	
 	private static $has_init	= FALSE;
-	private static $aliases		= array();
+	//private static $aliases		= array();
+	//private static $krak_fields	= array();
 
 	/* I N S T A N C E   P R O P E R T I E S */
+	public $fields = array();
 
 	protected $table			= '';
-	protected $model			= '';
-	protected $alias			= '';
-	protected $has_one			= array();
-	protected $has_many			= array();
+	//protected $has_one			= array();
+	//protected $has_many			= array();
+	protected $parent_of		= array();
+	protected $child_of			= array();
+	protected $buddy_of			= array();
 	protected $primary_key		= 'id';
 	protected $created_field	= '';
 	protected $updated_field	= '';
 	
-	protected $krak_obj;
 	protected $db;
 	
+	private $model				= '';
 	private $event_queues		= array();
-	private $last_save			= NULL;
 	private $is_related			= FALSE;
 	private $buddy				= NULL;
 	private $related_models		= array();
@@ -99,9 +99,9 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		if ( ! self::$has_init)
 		{
 			// Load configuration
-			if ($ci->config->load('krakatoa', TRUE, TRUE))
+			if ($ci->config->load('Krak', TRUE, TRUE))
 			{
-				self::$config = $ci->config->item('krakatoa');
+				self::$config = $ci->config->item('Krak');
 			}
 			
 			$this->_load_extensions();
@@ -112,7 +112,6 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		$ci->load->helper('inflector');
 		
 		// set up the default values
-		$this->krak_obj = new stdClass();
 		$this->class_name = get_class($this);
 		
 		if ($this->model == '')
@@ -120,23 +119,15 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			$this->model = str_replace('\\', '_', $this->class_name);
 		}
 		
-		if ($this->alias == '')
-		{
-			$this->alias = $this->model;
-		}
-		
-		// register the alias
-		self::$aliases[$this->alias][] = $this->class_name;
-		
 		if ($this->table == '')
 		{
 			$this->table = plural($this->model);
 		}
 			
 		// if user hasn't already supplied a fields array, then run the query
-		if (count(self::$fields) == 0)
+		if (count($this->fields) == 0)
 		{
-			self::$fields = $this->db->list_fields($this->table);
+			$this->fields = $this->db->list_fields($this->table);
 		}
 		
 		// Search for defined event functions to add in the event queue
@@ -148,8 +139,52 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			}
 		}
 		
-		$this->extend_related_objects($this->has_one);
-		$this->extend_related_objects($this->has_many);
+		// simple default values array
+
+		// set parent_of
+		foreach ($this->parent_of as $key => $class)
+		{
+			$default = array();
+			$default['this_column']	= $this->model . '_id';
+		
+			if (is_array($class))
+			{
+				$default['class'] = $key; 
+				$default = array_merge($default, $class);
+			}
+			else	// must be a string
+			{
+				$default['class'] = $class;
+			}
+			
+			// unset the current value because we don't use it any more, free up memory
+			unset($this->parent_of[$key]);
+			$this->parent_of[str_replace('\\', '_', $default['class'])] = $default;
+		}
+		
+		foreach ($this->child_of as $key => $class)
+		{
+			$default = array();
+			$default['parent_column']	= $this->model . '_id';
+		
+			if (is_array($class))
+			{
+				$default['class'] = $key; 
+				$default = array_merge($default, $class);
+			}
+			else	// must be a string
+			{
+				$default['class'] = $class;
+			}
+			
+			// unset the current value because we don't use it any more, free up memory
+			unset($this->parent_of[$key]);
+			$this->parent_of[str_replace('\\', '_', $default['class'])] = $default;
+		}
+		
+		$this->extend_related_objects($this->parent_of);
+		$this->extend_related_objects($this->child_of);
+		$this->extend_related_objects($this->buddy_of);
 	
 		if ($id !== NULL)
 		{
@@ -175,14 +210,14 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 
             if (!file_exists($file))
             {
-                show_error('Krakatoa Error: loading extension ' . $extension . ': File not found.');
+                show_error('Krak Error: loading extension ' . $extension . ': File not found.');
             }
 
             require_once $file;
 
             if (!class_exists($class))
             {
-                show_error("Krakatoa Error: Unable to find a class for extension $extension. Looked for class {$class}");
+                show_error("Krak Error: Unable to find a class for extension $extension. Looked for class {$class}");
             }
 
             $obj = new $class();
@@ -246,28 +281,16 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		//
 		// 2. If user ran a get statment, then check there
 		//
-		// 3. If user just saved, then check last_save. last_save and iter
-		// will never be available at the same time because save resets iter
-		// and get/query reset last_save
-		//
 		// 4. User must be trying access a related model, so instantiate the property
 		// then actually add to $this so that next time user asks for $this->related_model
 		// they won't go through __get
 		//
-		// 5. 'all' is Dm specific items that are deprecated in Krakatoa
+		// 5. 'all' is Dm specific items that are deprecated in Krak
 		// so just support them here, but we'll eventually drop these
 	
-		if (property_exists($this->krak_obj, $name))
-		{
-			return $this->krak_obj->{$name};
-		}
-		else if ($this->first_row !== NULL && property_exists($this->first_row, $name))
+		if ($this->first_row !== NULL && property_exists($this->first_row, $name))
 		{
 			return $this->first_row->{$name};
-		}
-		else if ($this->last_save !== NULL && property_exists($this->last_save, $name))
-		{
-			return $this->last_save->{$name};
 		}
 		else if (array_key_exists($name, $this->related_models))
 		{
@@ -334,7 +357,7 @@ error_str;
 			
 				return $this->related_models[$name];
 			}
-			else if ($this->has_alias($name, FALSE))
+			else if ($this->has_alias($name, FALSE))	// has_alias for has_many array
 			{
 				$this->related_models[$name] =	 		$bud	= new $this->has_many[$name]['class'];
 				$this->related_models[$name]->is_related		= TRUE;
@@ -355,6 +378,10 @@ error_str;
 				return $this->related_models[$name];
 			}
 		}
+		else if ($name == 'fields')
+		{
+			return self::$fields
+		}
 		else if ($name == 'all')
 		{
 			return $this->getIterator();
@@ -367,7 +394,7 @@ error_str;
 	 * 
 	 * @param unknown_type $method
 	 * @param unknown_type $args
-	 * @return Krakatoa|mixed
+	 * @return Krak|mixed
 	 */
 	public function __call($method, $args)
 	{
@@ -376,7 +403,7 @@ error_str;
         {
         	$obj = self::$extension_methods[$method];
         	
-            // First argument should be this instance of Krakatoa, the remaining arguments are passed verbatim
+            // First argument should be this instance of Krak, the remaining arguments are passed verbatim
             array_unshift($args, $this);
 
             $ret_val = call_user_func_array(array($obj, $method), $args);
@@ -397,11 +424,6 @@ error_str;
 			return $ret_val;
 	}
 	
-	public function __set($name, $value)
-	{
-		$this->krak_obj->{$name} = $value;
-	}
-	
 	/**
 	 * @description Overload the db->get() method and default with this models default table.
 	 * @param	int	$limit
@@ -412,7 +434,7 @@ error_str;
 	{
 		if ($this->is_related == TRUE)
 		{
-			return $this->get_related($this->buddy, $limit, $offset);
+			return $this->related_get($this->buddy, $limit, $offset);
 		}
 			
 		if ($table === '')
@@ -422,20 +444,19 @@ error_str;
 			
 		$this->last_res = $this->db->get($table, $limit, $offset);
 		
-		$this->last_save	= NULL;	// mark as null for get_pkey(), if last_save NULL then we ran a get, if iter NULL then we ran a save
 		$this->iter			= new ArrayIterator($this->last_res->result());
 		$this->first_row	= $this->iter->current();
-		$this->krak_obj		= new stdClass();
+		$this->clear();
 		
 		return $this;
 	}
 	
 	/**
-	 * @param Krakatoa The parent/buddy object to get from.
+	 * @param Krak The parent/buddy object to get from.
 	 * @param int limit
 	 * @param int offset
 	 */
-	public function get_related(Krakatoa &$buddy, $limit = NULL, $offset = NULL)
+	public function related_get(Krak &$buddy, $limit = NULL, $offset = NULL)
 	{
 		$rel_data = array();
 		
@@ -499,10 +520,9 @@ error_str;
 		// can't use $this->get because I'd run into an infinite loop
 		$this->last_res = $this->db->get($this->table, $limit, $offset);
 		
-		$this->last_save	= NULL;	// mark as null for save_related
 		$this->iter			= new ArrayIterator($this->last_res->result());
 		$this->first_row	= $this->iter->current();
-		$this->krak_obj		= new stdClass();
+		$this->clear();
 		
 		return $this;
 	}
@@ -522,25 +542,26 @@ error_str;
 	{
 		$this->last_res = $this->db->query($sql, $binds);
 		
-		$this->last_save	= NULL;	// mark as null for save_related
 		$this->iter			= new ArrayIterator($this->last_res->result());
 		$this->first_row	= $this->iter->current();
-		$this->krak_obj		= new stdClass();
+		$this->clear();
 		
 		return $this;
 	}
 	
-	public function save(Krakatoa &$rel_obj = NULL)
+	public function save(Krak &$rel_obj = NULL)
 	{
 		if ($rel_obj !== NULL)
 		{
-			return $this->save_related($rel_obj);
+			return $this->save_relation($rel_obj);
 		}
 		
-		// Are we saving or updating?
-		// if we have already run a get statement and the primary key field exists then we are updating
-		// a user could also just run the update() method... but that can get pretty taxing ; )
-		// we check primary key because user may have run a query statement, we need primary key to update in qb
+		/*
+		 * Are we saving or updating?
+		 * if we have already run a get statement and the primary key field exists then we are updating
+		 * a user could also just run the update() method... but that can get pretty taxing ; )
+		 * we check primary key because user may have run a query statement, we need primary key to update in qb
+		 */
 		if ($this->get_pkey_save() !== NULL)
 		{
 			return $this->update();
@@ -551,35 +572,80 @@ error_str;
 		
 		if ($this->created_field !== '')
 		{
-			$this->krak_obj->{$this->created_field} = date('Y-m-d H:i:s', time());
+			$this->{$this->created_field} = date('Y-m-d H:i:s', time());
 		}
 			
 		if ($this->updated_field !== '')
 		{
-			$this->krak_obj->{$this->updated_field} = date('Y-m-d H:i:s', time());
+			$this->{$this->updated_field} = date('Y-m-d H:i:s', time());
 		}
 		
 		// makes krak_obj only hold values in the field array
-		$this->validate_krak_obj();
+		$krak_data = array()
+		$this->build_krak_data($krak_data);
 		
-		$res = $this->db->insert($this->table, $this->krak_obj);
+		$res = $this->db->insert($this->table, $krak_data);
 		
 		if ($res)
+		{
 			$this->krak_obj->{$this->primary_key} = $this->db->insert_id();
+		}
 		
-		$this->last_save	= clone $this->krak_obj;
-		$this->krak_obj		= new stdClass();
 		$this->iter			= NULL;
 		$this->last_res		= NULL;
 		$this->first_row	= NULL;
+		$this->clear();
 		
 		$this->trigger(self::EVENT_AFTER_SAVE);
 		return ($res) ? $this->db->insert_id() : FALSE;
 	}
 
-	public function save_related(Krakatoa &$rel_obj)
+	public function save_relation(Krak &$buddy)
 	{
 		$res = FALSE;
+		
+		$rel_data = array();
+		
+		// my bud has one of me
+		if (array_key_exists($buddy->class_name, $this->has_one))
+		{
+			$rel_data = $this->has_one[$this->class_name];
+			
+			 
+			 if ($rel_data['is_parent'] === TRUE)
+			 {
+			 	/*
+			 	 * this has an ITFK of buddy. So buddy's this_column
+			 	 * is inside of the this table
+			 	 */
+			 	$this->db->where($rel_data['this_column'], $buddy->get_pkey());
+			 }
+			 else
+			 {
+			 	// buddy has an itfk to this.
+			 	$this->db->where($this->primary_key, $buddy->{$rel_data['buddy_column']});
+			 } 
+		}
+		else if (array_key_exists($this->class_name, $buddy->has_many))
+		{
+			if (array_key_exists($buddy->class_name, $this->has_one))
+			{
+				$this->db->where($buddy->has_many[$this->class_name]['this_column'], $buddy->get_pkey());
+			}
+			else if (array_key_exists($buddy->class_name, $this->has_many))
+			{
+				$rel_data = $buddy->has_many[$this->class_name];
+				$j_clause = $this->table . '.' . $this->primary_key . ' = ' . $rel_data['join_table'] . '.' . $rel_data['buddy_column'];
+
+				$this->db->select($this->table . '.*');
+				$this->db->join($rel_data['join_table'], $j_clause, 'left');
+				$this->db->where($rel_data['join_table'] . '.' . $rel_data['this_column'], $buddy->get_pkey());
+			}
+			else
+			{
+				show_error("# Krak error\n relationship not properly specified");
+			}
+		}
 		
 		// determine the relationships
 		
@@ -657,7 +723,7 @@ error_str;
 		return $res;
 	}
 	
-	public function delete(Krakatoa &$rel_obj = NULL)
+	public function delete(Krak &$rel_obj = NULL)
 	{
 		if ($rel_obj !== NULL)
 			return $this->delete_related($rel_obj);
@@ -702,13 +768,13 @@ error_str;
 		{
 			$this->db->where_in($this->primary_key, $where_in);
 			$res = $this->db->delete($this->table);
-			$this->krak_obj = new stdClass();
+			$this->clear();
 		}
 		
 		return $res;
 	}
 	
-	public function delete_related(Krakatoa &$other_obj)
+	public function delete_related(Krak &$other_obj)
 	{
 		$res = FALSE;
 		
@@ -740,7 +806,9 @@ error_str;
 			$res = $this->db->update($this->table, $a, array($this->primary_key => $this->get_pkey()));
 		
 			if ($res === FALSE)
+			{
 				return FALSE;
+			}
 		}
 		
 		// many to many now, we don't need to worry about a many-to-one or one-to-many because
@@ -766,13 +834,19 @@ error_str;
 	public function add_event_listener($callback, $event_types = '', $use_this = TRUE)
 	{
 		if ($event_types === '')
+		{
 			$event_types = self::$before_save_update;
-	
+		}
+		
 		if ($use_this)
+		{
 			$callback = array($this, $callback);
-	
+		}
+		
 		if ( ! is_array($event_types))
+		{
 			$event_types = array($event_types);
+		}
 			
 		foreach ($event_types as $et)
 			$this->event_queues[$et][] = $callback;
@@ -781,13 +855,19 @@ error_str;
 	public function remove_event_listener($callback, $event_types = '', $use_this = TRUE)
 	{
 		if ($event_types === '')
+		{
 			$event_types = self::$before_save_update;
-	
+		}
+		
 		if ($use_this)
+		{
 			$callback = array($this, $callback);
-	
+		}
+		
 		if ( ! is_array($event_types))
+		{
 			$event_types = array($event_types);
+		}
 			
 		foreach ($event_types as $et)
 		{
@@ -805,9 +885,12 @@ error_str;
 		}
 	}
 	
-	public function &get_krak()
+	public function clear()
 	{
-		return $this->krak_obj;
+		foreach (self::$fields as $field)
+		{
+			unset($this->{$field});
+		}
 	}
 	
 	public function get_krak_bundle()
@@ -826,7 +909,9 @@ error_str;
 	public function num_rows()
 	{
 		if ($this->last_res !== NULL)
+		{
 			return $this->last_res->num_rows();
+		}
 		
 		return 0;
 	}
@@ -834,7 +919,9 @@ error_str;
 	public function result()
 	{
 		if ($this->last_res !== NULL)
+		{
 			return $this->last_res->result();
+		}
 			
 		return array();
 	}
@@ -844,18 +931,18 @@ error_str;
 	 * Only keys that are apart $this->fields should be sent to
 	 * the database
 	 */
-	private function validate_krak_obj()
+	private function build_krak_data(&$krak_data)
 	{
-		$valid_krak = new StdClass();
-		foreach ($this->fields as $field)
+		$valid_krak = array();
+		foreach (self::$fields as $field)
 		{
-			if (property_exists($this->krak_obj, $field))
+			if (property_exists($this, $field))
 			{
-				$valid_krak->{$field} = &$this->krak_obj->{$field};
+				$valid_krak[$field] = &$this->{$field};
 			}
 		}
 		
-		$this->krak_obj = $valid_krak;
+		$krak_data = $valid_krak;
 	}
 	
 	private function trigger($event)
@@ -879,10 +966,6 @@ error_str;
 		if (property_exists($this->krak_obj, $this->primary_key))
 		{
 			return $this->krak_obj->{$this->primary_key};
-		}
-		else if ($this->last_save !== NULL)
-		{
-			return $this->last_save->{$this->primary_key};
 		}
 		else if ($this->iter !== NULL)
 		{
@@ -939,9 +1022,9 @@ error_str;
 	{
 		if ($has_one)
 		{
-			for (self::$aliases[$name] as $class)
+			foreach (self::$aliases[$name] as $class)
 			{
-				if (array_key_exists($class, $this->has_one)
+				if (array_key_exists($class, $this->has_one))
 				{
 					return TRUE;
 				}
@@ -949,9 +1032,9 @@ error_str;
 		}
 		else
 		{
-			for (self::$aliases[$name] as $class)
+			foreach (self::$aliases[$name] as $class)
 			{
-				if (array_key_exists($class, $this->has_many)
+				if (array_key_exists($class, $this->has_many))
 				{
 					return TRUE;
 				}
@@ -1025,4 +1108,4 @@ error_str;
 }
 
 /*** register the loader functions ***/
-spl_autoload_register('Krakatoa::model_autoloader');
+spl_autoload_register('Krak::model_autoloader');
