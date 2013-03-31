@@ -62,6 +62,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	/* I N S T A N C E   P R O P E R T I E S */
 	public $fields = array();
 
+	protected $model			= '';
 	protected $table			= '';
 	//protected $has_one			= array();
 	//protected $has_many			= array();
@@ -77,7 +78,8 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	private $model				= '';
 	private $event_queues		= array();
 	private $is_related			= FALSE;
-	private $buddy				= NULL;
+	private $related_model		= NULL;
+	private $related_name		= '';
 	private $related_models		= array();
 	private $class_name			= '';
 	
@@ -140,52 +142,84 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		}
 		
 		// simple default values array
-
-		// set parent_of
+		$default = array();
+		$index = '';
+		
+		// setup the parent_of relationships
 		foreach ($this->parent_of as $key => $class)
 		{
-			$default = array();
-			$default['this_column']	= $this->model . '_id';
-		
 			if (is_array($class))
 			{
-				$default['class'] = $key; 
-				$default = array_merge($default, $class);
+				$default['class']		= (isset($class['class']))			? $class['class']		: $key;
+				$default['this_column']	= (isset($class['this_column']))	? $class['this_column']	: $this->model . '_' . $this->primary_key;
+				$index					= (isset($class['class']))			? $key					: strtolower(str_replace('\\', '_', $key));
 			}
 			else	// must be a string
 			{
-				$default['class'] = $class;
+				$default['class']		= $class;
+				$default['this_column']	= $this->model . '_' . $this->primary_key;
+				$index = strtolower(str_replace('\\', '_', $class));
 			}
 			
 			// unset the current value because we don't use it any more, free up memory
 			unset($this->parent_of[$key]);
-			$this->parent_of[str_replace('\\', '_', $default['class'])] = $default;
+			$this->parent_of[$index] = $default;
 		}
 		
+		// reset the vals
+		$default = array();
+		$index = '';
+		
+		// setup the child_of relationships
 		foreach ($this->child_of as $key => $class)
 		{
-			$default = array();
-			$default['parent_column']	= $this->model . '_id';
-		
 			if (is_array($class))
 			{
-				$default['class'] = $key; 
-				$default = array_merge($default, $class);
+				$default['class']			= (isset($class['class']))			? $class['class']			: $key;
+				$default['parent_column']	= (isset($class['parent_column']))	? $class['parent_column']	: '';	// will be evaluated when the query is made
+				$index						= (isset($class['class']))			? $key						: strtolower(str_replace('\\', '_', $key));
 			}
 			else	// must be a string
 			{
-				$default['class'] = $class;
+				$default['class']			= $class;
+				$default['parent_column']	= '';	// will be evaluated when the query is made
+				$index = strtolower(str_replace('\\', '_', $class));
 			}
 			
 			// unset the current value because we don't use it any more, free up memory
-			unset($this->parent_of[$key]);
-			$this->parent_of[str_replace('\\', '_', $default['class'])] = $default;
+			unset($this->child_of[$key]);
+			$this->child_of[$index] = $default;
 		}
 		
-		$this->extend_related_objects($this->parent_of);
-		$this->extend_related_objects($this->child_of);
-		$this->extend_related_objects($this->buddy_of);
-	
+		// reset the vals
+		$default = array();
+		$index = '';
+		
+		// setup the buddy_of relationships
+		foreach ($this->buddy_of as $key => $class)
+		{
+			if (is_array($class))
+			{
+				$default['class']			= (isset($class['class']))			? $class['class']			: $key;
+				$default['this_column']		= (isset($class['this_column']))	? $class['this_column']		: $this->model . '_' . $this->primary_key;
+				$default['buddy_column']	= (isset($class['buddy_column']))	? $class['buddy_column']	: '';	// will be evaluated when the query is made
+				$default['join_table']		= (isset($class['join_table']))		? $class['join_table']		: '';	// will be evaluated when the query is made
+				$index						= (isset($class['class']))			? $key						: strtolower(str_replace('\\', '_', $key));
+			}
+			else	// must be a string
+			{
+				$default['class']			= $class;
+				$default['this_column']		= $this->model . '_' . $this->primary_key;
+				$default['buddy_column']	= '';	// will be evaluated when the query is made
+				$default['join_table']		= '';	// will be evaluated when the query is made
+				$index						= strtolower(str_replace('\\', '_', $class));
+			}
+			
+			// unset the current value because we don't use it any more, free up memory
+			unset($this->buddy_of[$key]);
+			$this->buddy_of[$index] = $default;
+		}
+		
 		if ($id !== NULL)
 		{
 			$this->db->where($this->primary_key, $id);
@@ -292,95 +326,67 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		{
 			return $this->first_row->{$name};
 		}
-		else if (array_key_exists($name, $this->related_models))
+		else if (array_key_exists($name, $this->parent_of))
 		{
-			return $this->related_models[$name];
-		}
-		else if (array_key_exists($name, self::$aliases))
-		{
-			if ($this->has_alias($name, TRUE))
+			$child					= new $this->parent_of[$name]['class'];
+			$child->is_related		= TRUE;
+			$child->related_model	= &$this;
+			$child->related_name	= $name;
+		
+			// let's do some validation
+			if (in_array($this->parent_of[$name]['this_column'], $child->fields))
 			{
-				$this->related_models[$name]	= 		$bud	= new $this->has_one[$name]['class'];
-				$this->related_models[$name]->is_related		= TRUE;
-				$this->related_models[$name]->buddy				= $this;			
-			
-				/* 
-				 * we need to init the buddy_column and join_table values
-				 * for the has_one array if the user didn't already specify
-				 * one because know we have the object to use
-				 */
-				if ($this->has_one[$name]['buddy_column'] == '')
-				{
-					$this->has_one[$name]['buddy_column'] = $bud->model . '_' . $bud->primary_key;
-				}
-			
-				if ($this->has_one[$name]['join_table'] == '')
-				{
-					$this->has_one[$name]['join_table'] = ($bud->table < $this->table) ? $bud->table . '_' . $this->table : $this->table . '_' . $bud->table;
-				}
-			
-				// let's do some validation
-				
-				// if the bud has a reference to this, then this is parent
-				if (in_array($this->has_one[$name]['this_column'], $bud::$fields))
-				{
-					$this->has_one[$name]['is_parent'] = TRUE;
-				}
-				else if (in_array($this->has_one[$name]['buddy_column'], self::$fields))
-				{
-					$this->has_one[$name]['is_parent'] = FALSE;
-				}
-				else
-				{
-					// whoops!
-					$tmp_class_name = get_class($this);
-					$tmp_bud_class_name = get_class($bud);
-					$tmp_field_printr = print_r(self::$fields, TRUE);
-					$tmp_bud_field_printr = print_r(self::$fields, TRUE);
-					$error = <<<error_str
-# Krak Error
-
-Unable to locate In-Table-Foreign-Key for `{$tmp_class_name}` in
-has_one relationship with `{$tmp_bud_class_name}`
-
-\$this Class: {$tmp_class_name}
-Buddy Class: {$tmp_bud_class_name}
-{$tmp_class_name}::\$fields => {$tmp_field_printr}
-
-{$tmp_bud_class_name}::\$fields => {$tmp_bud_field_printr}
-
-\$this->has_one => 
-error_str;
-					show_error($error . print_r($this->has_one[$name], TRUE));
-					die();
-				}
-			
-				return $this->related_models[$name];
+				show_error('Krak Error: Child object doesn\'t contain foreign key column to this parent. Parent = ' . $this->class_name . ', Child = ' . $child->class_name);
+				die();
 			}
-			else if ($this->has_alias($name, FALSE))	// has_alias for has_many array
-			{
-				$this->related_models[$name] =	 		$bud	= new $this->has_many[$name]['class'];
-				$this->related_models[$name]->is_related		= TRUE;
-				$this->related_models[$name]->buddy				= $this;
-			
-				if ($this->has_many[$name]['buddy_column'] == '')
-				{
-					$this->has_many[$name]['buddy_column'] = $bud->model . '_' . $bud->primary_key;
-				}
-			
-				if ($this->has_many[$name]['join_table'] == '')
-				{
-					$this->has_many[$name]['join_table'] = ($bud->table < $this->table) ? $bud->table . '_' . $this->table : $this->table . '_' . $bud->table;
-				}
-			
-				// no way to validate
-			
-				return $this->related_models[$name];
-			}
+		
+			$this->{$name} = $child;
+			return $this->{$name};
 		}
-		else if ($name == 'fields')
+		else if (array_key_exists($name, $this->child_of))
 		{
-			return self::$fields
+			$parent					= new $this->child_of[$name]['class'];
+			$parent->is_related		= TRUE;
+			$parent->related_model	= &$this;
+			$parent->related_name	= $name;
+		
+			// we have to finish the child_of array relationships now that we have the parent object
+			if ($this->child_of[$name]['parent_column'] == '')
+			{
+				$this->child_of[$name]['parent_column'] = $parent->model . '_' . $parent->primary_key;
+			}
+		
+			// let's do some validation
+			if (in_array($this->child_of[$name]['parent_column'], $this->fields))
+			{
+				show_error('Krak Error: Child object doesn\'t contain foreign key column to this parent. Parent = ' . $parent->class_name . ', Child = ' . $this->class_name);
+				die();
+			}
+		
+			$this->{$name} = $parent;
+			return $this->{$name};
+		}
+		else if (array_key_exists($name, $this->buddy_of))
+		{
+			$buddy					= new $this->buddy_of[$name]['class'];
+			$buddy->is_related		= TRUE;
+			$buddy->related_model	= &$this;
+			$buddy->related_name	= $name;
+			
+			// we have to finish the buddy_of array
+			if ($this->buddy_of[$name]['buddy_column'] == '')
+			{
+				$this->buddy_of[$name]['buddy_column'] = $buddy->model . '_' . $buddy->primary_key;
+			}
+			
+			if ($this->buddy_of[$name]['join_table'] == '')
+			{
+				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+			}
+			
+			// theres no way to do validation, so we'll just assume everything was setup properly with the join table and return buddy
+			$this->{$name} = $buddy;
+			return $this->buddy;
 		}
 		else if ($name == 'all')
 		{
@@ -434,7 +440,7 @@ error_str;
 	{
 		if ($this->is_related == TRUE)
 		{
-			return $this->related_get($this->buddy, $limit, $offset);
+			return $this->related_get($this->related_model, $limit, $offset);
 		}
 			
 		if ($table === '')
@@ -987,35 +993,6 @@ error_str;
 		}
 		
 		return NULL;
-	}
-	
-	private function extend_related_objects(&$related_objects)
-	{	
-		// simple default values array
-		$default = array();
-		
-		foreach ($related_objects as $key => $class)
-		{
-			$default['this_column']		= $this->model . '_id';
-				
-			// both of these values get populated once we have the buddy object
-			$default['buddy_column']	= '';
-			$default['join_table']		= '';
-		
-			if (is_array($class))
-			{
-				$default['class'] = $key; 
-				$default = array_merge($default, $class);
-			}
-			else	// must be a string
-			{
-				$default['class'] = $class;
-			}
-			
-			// unset the current value because we don't use it any more, free up memory
-			unset($related_objects[$key]);
-			$related_objects[$default['class']] = $default;
-		}
 	}
 	
 	private function has_alias($name, $has_one = TRUE)

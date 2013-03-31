@@ -6,7 +6,7 @@ Simple ORM for CI 3.0
 # TODO
 
 - Finish implementing latest rendition of Krak\Model
-	- finish related getting,saving,deleting
+    - finish related getting,saving,deleting
 - Create Result class
 
 # Sample World
@@ -22,14 +22,14 @@ entities
 with the following relationships
 
 ````
-Riders			-> many -> Rider\Videos
-Riders			-> many -> Divisions
-Rider\Videos	-> one	-> Riders
-Rider\Videos	-> one	-> Divisions
-Divisions		-> many -> Riders
-Divisions		-> many -> Videos
-Divisions		-> one	-> Sports
-Sport			-> many -> Divisions
+Riders          -> many -> Rider\Videos
+Riders          -> many -> Divisions
+Rider\Videos    -> one  -> Riders
+Rider\Videos    -> one  -> Divisions
+Divisions       -> many -> Riders
+Divisions       -> many -> Videos
+Divisions       -> one  -> Sports
+Sport           -> many -> Divisions
 ````
 
 # Relationships
@@ -52,13 +52,13 @@ Let's see how we define that in Krak syntax.
 <?php
 class Rider extends Krak\Model
 {
-	protected $parent_of = array(
-		'Rider\Video'
-	);
-	
-	protected $buddy_of = array(
-		'Division'
-	);
+    protected $parent_of = array(
+        'Rider\Video'
+    );
+    
+    protected $buddy_of = array(
+        'Division'
+    );
 }
 
 /* End of file Rider.php */
@@ -72,9 +72,9 @@ namespace Rider;
 
 class Video extends \Krak\Model
 {
-	protected $child_of = array(
-		'Rider', 'Division'
-	);
+    protected $child_of = array(
+        'Rider', 'Division'
+    );
 }
 
 /* End of file Video.php */
@@ -86,17 +86,17 @@ class Video extends \Krak\Model
 <?php
 class Division extends Krak\Model
 {
-	protected $parent_of = array(
-		'Rider\Video'
-	);
-	
-	protected $child_of = array(
-		'Sport'
-	);
-	
-	protected $buddy_of = array(
-		'Rider'
-	);
+    protected $parent_of = array(
+        'Rider\Video'
+    );
+    
+    protected $child_of = array(
+        'Sport'
+    );
+    
+    protected $buddy_of = array(
+        'Rider'
+    );
 }
 
 /* End of file Division.php */
@@ -108,9 +108,9 @@ class Division extends Krak\Model
 <?php
 class Sport extends Krak\Model
 {
-	protected $parent_of = array(
-		'Division'
-	);
+    protected $parent_of = array(
+        'Division'
+    );
 }
 
 /* End of file Sport.php */
@@ -154,39 +154,40 @@ of these relationships are named in the table.
 <?php
 class Division extends Krak\Model
 {
-	/*
-	 * The index of the array will be the same name of the related object.
-	 * e.g.
-	 * $d = new Division();
-	 * $d->rider_video->get();	// rider_video is also the index of the array
-	 *
-	 * rider_video was something like 'd_vids', then we'd access the related
-	 * object with that name
-	 * e.g.
-	 * $d = new Division();
-	 * $d->d_vids->get();
-	 */
-	protected $parent_of = array(
-		'rider_video'	=> array(	// the index of the array will default to the class name strtolower(str_replace('\\', '_', $class_name))
-			'class'			=> 'Rider\Video',
-			'this_column'	=> 'division_id'	// defaults to $this->model . '_' . $this->primary_key
-		)
-	);
-	
-	protected $child_of = array(
-		'sport' => array(
-			'class'			=> 'Sport',
-			'parent_column' => 'sport_id'	// defaults to parent->model . '_' . parent->primary_key
-		)
-	);
-	
-	protected $buddy_of = array(
-		'rider' => array(
-			'class'			=> 'Rider',
-			'this_column'	=> 'division_id',	// defaults to $this->model . '_' . $this->primary_key
-			'buddy_column'	=> 'rider_id'		// defaults to buddy->model . '_' . buddy->primary_key
-		)
-	);
+    /*
+     * The index of the array will be the same name of the related object.
+     * e.g.
+     * $d = new Division();
+     * $d->rider_video->get();  // rider_video is also the index of the array
+     *
+     * rider_video was something like 'd_vids', then we'd access the related
+     * object with that name
+     * e.g.
+     * $d = new Division();
+     * $d->d_vids->get();
+     */
+    protected $parent_of = array(
+        'rider_video'   => array(   // the index of the array will default to the class name strtolower(str_replace('\\', '_', $class_name))
+            'class'         => 'Rider\Video',
+            'this_column'   => 'division_id'    // defaults to $this->model . '_' . $this->primary_key
+        )
+    );
+    
+    protected $child_of = array(
+        'sport' => array(
+            'class'         => 'Sport',
+            'parent_column' => 'sport_id'   // defaults to parent->model . '_' . parent->primary_key
+        )
+    );
+    
+    protected $buddy_of = array(
+        'rider' => array(
+            'class'         => 'Rider',
+            'this_column'   => 'division_id',       // defaults to $this->model . '_' . $this->primary_key
+            'buddy_column'  => 'rider_id'           // defaults to buddy->model . '_' . buddy->primary_key
+            'join_table'    => 'divsions_riders'    // defaults to ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table
+        )
+    );
 }
 
 /* End of file Division.php */
@@ -214,9 +215,9 @@ $rel_obj = new $class;
 
 ````php
 protected $parent_of = array(
-	'Rider\Video'	=> array(
-		'this_column'	=> 'division_id'	// defaults to $this->model . '_' . $this->primary_key
-	)
+    'Rider\Video'   => array(
+        'this_column'   => 'division_id'    // defaults to $this->model . '_' . $this->primary_key
+    )
 );
 ````
 
@@ -226,10 +227,10 @@ index will become the related_object name to turn into this code.
 
 ````php
 protected $parent_of = array(
-	'rider_video'	=> array(	// the index of the array will default to the class name strtolower(str_replace('\\', '_', $class_name))
-		'class'			=> 'Rider\Video',
-		'this_column'	=> 'division_id'	// defaults to $this->model . '_' . $this->primary_key
-	)
+    'rider_video'   => array(   // the index of the array will default to the class name strtolower(str_replace('\\', '_', $class_name))
+        'class'         => 'Rider\Video',
+        'this_column'   => 'division_id'    // defaults to $this->model . '_' . $this->primary_key
+    )
 );
 ````
 
