@@ -6,12 +6,6 @@ defined('BASEPATH') || exit('No direct script access allowed');
 class Result
 {
 	protected $krak;
-	protected $primary_key;
-	
-	public function __construct(&$krak)
-	{
-		$this->krak = &$krak;
-	}
 
 	public function save()
 	{
@@ -26,5 +20,10 @@ class Result
 	public function delete()
 	{
 	
+	}
+	
+	public function set_krak(&$krak)
+	{
+		$this->krak = &$krak;
 	}
 }

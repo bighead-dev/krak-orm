@@ -8,6 +8,10 @@ require_once 'Bundle.php';
 
 abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 {
+	// Iterator Contants
+	const ITERATOR_BUFFERED		= 'Buffered';
+	const ITERATOR_UNBUFFERED	= 'Unbuffered';
+
 	// Event Constants
 	const EVENT_BEFORE_SAVE		= '_before_save';
 	const EVENT_AFTER_SAVE		= '_after_save';
@@ -60,7 +64,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	//private static $krak_fields	= array();
 
 	/* I N S T A N C E   P R O P E R T I E S */
-	public $fields = array();
+	protected $fields = array();
 
 	protected $model			= '';
 	protected $table			= '';
@@ -75,7 +79,6 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	
 	protected $db;
 	
-	private $model				= '';
 	private $event_queues		= array();
 	private $is_related			= FALSE;
 	private $related_model		= NULL;
@@ -85,6 +88,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	
 	// iterator related variables
 	private $iter			= NULL;
+	private $iter_class		= '';
 	private $first_row		= NULL;
 	private $last_res		= NULL;
 	
@@ -105,6 +109,8 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			{
 				self::$config = $ci->config->item('Krak');
 			}
+			
+			$this->iter_class = 'Iterator\\' . (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
 			
 			$this->_load_extensions();
 			
@@ -388,6 +394,10 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			$this->{$name} = $buddy;
 			return $this->buddy;
 		}
+		else if ($name == 'fields')
+		{
+			return $this->fields;
+		}
 		else if ($name == 'all')
 		{
 			return $this->getIterator();
@@ -440,7 +450,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	{
 		if ($this->is_related == TRUE)
 		{
-			return $this->related_get($this->related_model, $limit, $offset);
+			return $this->related_get($limit, $offset);
 		}
 			
 		if ($table === '')
@@ -450,7 +460,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			
 		$this->last_res = $this->db->get($table, $limit, $offset);
 		
-		$this->iter			= new ArrayIterator($this->last_res->result());
+		$this->iter			= new $this->iter_class($this->last_res->result(), $this);
 		$this->first_row	= $this->iter->current();
 		$this->clear();
 		
@@ -462,71 +472,45 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	 * @param int limit
 	 * @param int offset
 	 */
-	public function related_get(Krak &$buddy, $limit = NULL, $offset = NULL)
-	{
-		$rel_data = array();
-		
-		// my bud has one of me
-		if (array_key_exists($this->class_name, $buddy->has_one))
+	public function related_get($limit = NULL, $offset = NULL)
+	{	
+		// if I'm a child of my related_model
+		if (array_key_exists($this->related_name, $this->related_model->parent_of))
 		{
-			$rel_data = $buddy->has_one[$this->class_name];
-			
 			/*
-			 * We've already validated the buddy -> one -> this
-			 * relationship, so we just need to check if 
-			 * This relationship may be 
-			 * buddy -> one -> this & this -> one -> buddy
-			 * OR
-			 * buddy -> one -> this & this -> many -> buddy
-			 *
-			 * if one-to-one then the ITFK can be in either
-			 * table.
-			 * if one-to-many then the ITFK can only be in 
-			 * the many (in this case it would be in this)
-			 * So let's see if this has the key first, then
-			 * we'll check buddy. If they both don't have
-			 * it then there's a big issue.
+			 * I'm for sure a child, so the fkey is in my table, and I don't
+			 * need to do any worry about any errors because I've already
+			 * done error checking.
 			 */
-			 
-			 if ($rel_data['is_parent'] === TRUE)
-			 {
-			 	/*
-			 	 * this has an ITFK of buddy. So buddy's this_column
-			 	 * is inside of the this table
-			 	 */
-			 	$this->db->where($rel_data['this_column'], $buddy->get_pkey());
-			 }
-			 else
-			 {
-			 	// buddy has an itfk to this.
-			 	$this->db->where($this->primary_key, $buddy->{$rel_data['buddy_column']});
-			 } 
+			
+			$this->db->where($this->related_model->parent_of[$this->related_name]['this_column'], $this->related_model->get_pkey());
 		}
-		else if (array_key_exists($this->class_name, $buddy->has_many))
+		else if (array_key_exists($this->related_name, $this->related_model->child_of))	// if I'm a parent
 		{
-			if (array_key_exists($buddy->class_name, $this->has_one))
-			{
-				$this->db->where($buddy->has_many[$this->class_name]['this_column'], $buddy->get_pkey());
-			}
-			else if (array_key_exists($buddy->class_name, $this->has_many))
-			{
-				$rel_data = $buddy->has_many[$this->class_name];
-				$j_clause = $this->table . '.' . $this->primary_key . ' = ' . $rel_data['join_table'] . '.' . $rel_data['buddy_column'];
-
-				$this->db->select($this->table . '.*');
-				$this->db->join($rel_data['join_table'], $j_clause, 'left');
-				$this->db->where($rel_data['join_table'] . '.' . $rel_data['this_column'], $buddy->get_pkey());
-			}
-			else
-			{
-				show_error("# Krak error\n relationship not properly specified");
-			}
+			/*
+			 * I'm for sure a parent, so the fkey is in my child table (related_model)
+			 * No need for error checking because it was already handled in __get
+			 */
+			
+			// e.g $this->db->where('id', $video->rider_id);
+			$this->db->where($this->primary_key, $this->related_model->{$this->related_model->child_of[$this->realted_name]['parent_column']});
+		}
+		else if (array_key_exists($this->related_name, $this->related_model->buddy_of))
+		{
+			$rel_data = $this->related_model->buddy_of[$this->related_name];
+			
+			// I'm for sure a buddy
+			$j_clause = $this->table . '.' . $this->primary_key . ' = ' . $rel_data['join_table'] . '.' . $rel_data['buddy_column'];
+			
+			$this->db->select($this->table . '.*');
+			$this->db->join($rel_data['join_table'], $j_clause, 'left');
+			$this->db->where($rel_data['join_table'] . '.' . $rel_data['this_column'], $this->related_model->get_pkey());
 		}
 		
 		// can't use $this->get because I'd run into an infinite loop
 		$this->last_res = $this->db->get($this->table, $limit, $offset);
 		
-		$this->iter			= new ArrayIterator($this->last_res->result());
+		$this->iter			= new $this->iter_class($this->last_res->result(), $this);
 		$this->first_row	= $this->iter->current();
 		$this->clear();
 		
@@ -548,27 +532,23 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	{
 		$this->last_res = $this->db->query($sql, $binds);
 		
-		$this->iter			= new ArrayIterator($this->last_res->result());
+		// Create a new instance of iterator
+		$this->iter			= new $this->iter_class($this->last_res->result(), $this);
 		$this->first_row	= $this->iter->current();
 		$this->clear();
 		
 		return $this;
 	}
 	
-	public function save(Krak &$rel_obj = NULL)
-	{
-		if ($rel_obj !== NULL)
-		{
-			return $this->save_relation($rel_obj);
-		}
-		
+	public function save()
+	{	
 		/*
 		 * Are we saving or updating?
 		 * if we have already run a get statement and the primary key field exists then we are updating
 		 * a user could also just run the update() method... but that can get pretty taxing ; )
-		 * we check primary key because user may have run a query statement, we need primary key to update in qb
+		 * we check primary key because user may have run a query statement, we need primary key to update in krak
 		 */
-		if ($this->get_pkey_save() !== NULL)
+		if ($this->get_pkey() !== NULL)
 		{
 			return $this->update();
 		}
@@ -594,7 +574,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		
 		if ($res)
 		{
-			$this->krak_obj->{$this->primary_key} = $this->db->insert_id();
+			$this->{$this->primary_key} = $this->db->insert_id();
 		}
 		
 		$this->iter			= NULL;
@@ -606,101 +586,70 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		return ($res) ? $this->db->insert_id() : FALSE;
 	}
 
-	public function save_relation(Krak &$buddy)
+	public function save_relation($buddy, $name = '', &$data = array())
 	{
-		$res = FALSE;
-		
-		$rel_data = array();
-		
-		// my bud has one of me
-		if (array_key_exists($buddy->class_name, $this->has_one))
+		if (is_array($buddy))
 		{
-			$rel_data = $this->has_one[$this->class_name];
-			
-			 
-			 if ($rel_data['is_parent'] === TRUE)
-			 {
-			 	/*
-			 	 * this has an ITFK of buddy. So buddy's this_column
-			 	 * is inside of the this table
-			 	 */
-			 	$this->db->where($rel_data['this_column'], $buddy->get_pkey());
-			 }
-			 else
-			 {
-			 	// buddy has an itfk to this.
-			 	$this->db->where($this->primary_key, $buddy->{$rel_data['buddy_column']});
-			 } 
-		}
-		else if (array_key_exists($this->class_name, $buddy->has_many))
-		{
-			if (array_key_exists($buddy->class_name, $this->has_one))
+			foreach ($buddy as $key => $value)
 			{
-				$this->db->where($buddy->has_many[$this->class_name]['this_column'], $buddy->get_pkey());
+				if (is_string($key))
+				{
+					$this->save_relation($buddy, $key, $data);
+				}
+				else
+				{
+					$this->save_relation($buddy, '', $data);
+				}
 			}
-			else if (array_key_exists($buddy->class_name, $this->has_many))
-			{
-				$rel_data = $buddy->has_many[$this->class_name];
-				$j_clause = $this->table . '.' . $this->primary_key . ' = ' . $rel_data['join_table'] . '.' . $rel_data['buddy_column'];
-
-				$this->db->select($this->table . '.*');
-				$this->db->join($rel_data['join_table'], $j_clause, 'left');
-				$this->db->where($rel_data['join_table'] . '.' . $rel_data['this_column'], $buddy->get_pkey());
-			}
-			else
-			{
-				show_error("# Krak error\n relationship not properly specified");
-			}
-		}
-		
-		// determine the relationships
-		
-		// $rel has one of this
-		// e.g. user has one country
-		// table -> users
-		// buddy_column -> country_id
-		// update users
-		// set country_id = {country_id_val}
-		// where {primary_key} = {user_id_val}
-		
-		if (array_key_exists($this->model, $rel_obj->has_one))
-		{
-			$a = array($rel_obj->has_one[$this->model]['buddy_column'] => $this->get_pkey());
-			$res = $this->db->update($rel_obj->table, $a, array($rel_obj->primary_key => $rel_obj->get_pkey()));
-			
-			if ($res === FALSE)
-				return FALSE;
 		}
 	
-		// this has one of $rel
-		
-		if (array_key_exists($rel_obj->model, $this->has_one))
+		if ($name == '')
 		{
-			$a = array($this->has_one[$rel_obj->model]['buddy_column'] => $rel_obj->get_pkey());
-			$res = $this->db->update($this->table, $a, array($this->primary_key => $this->get_pkey()));
-		
-			if ($res === FALSE)
-				return FALSE;
+			$name = $buddy->model;
 		}
 		
-		// many to many now, we don't need to worry about a many-to-one or one-to-many because
-		// the obj that has_many doesn't have any join fields
-		if (array_key_exists($rel_obj->model, $this->has_many) && array_key_exists($this->model, $rel_obj->has_many))
+		if (array_key_exists($name, $this->parent_of))
 		{
-			$rel_data = $this->has_many[$rel_obj->model];
-			$full_table = $rel_data['join_table'];
-			
-			if ($full_table == '')
+			$buddy->{$this->parent_of[$name]['this_column']} = $this->get_pkey();
+		}
+		else if (array_key_exists($name, $this->child_of))
+		{
+			// parent_column may not have been set, so let's set now if it hasn't
+			if ($this->child_of[$name]['parent_column'] == '')
 			{
-				$full_table = ($rel_obj->table < $this->table) ? $rel_obj->table . '_' . $this->table : $this->table . '_' . $rel_obj->table;
-				$rel_data['join_table'] = $full_table;
+				$this->child_of[$name]['parent_column'] = $buddy->model . '_' . $buddy->primary_key;
 			}
 			
-			$a = array($rel_data['this_colum'] => $this->get_pkey(), $rel_data['buddy_column'] => $rel_obj->get_pkey());
-			$res = $this->db->insert($full_table, $a);
+			$this->{$this->child_of[$name]['parent_column']} = $buddy->get_pkey();		
+		}
+		else if (array_key_exists($name, $this->buddy_of))
+		{
+			// The buddy values may not have been set, so let's set them now
+			if ($this->buddy_of[$name]['buddy_column'] == '')
+			{
+				$this->buddy_of[$name]['buddy_column'] = $buddy->model . '_' . $buddy->primary_key;
+			}
+			
+			if ($this->buddy_of[$name]['join_table'] == '')
+			{
+				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+			}
+		
+			$data[] = array(
+				$this->buddy_of['this_column']	=> $this->get_pkey(),
+				$this->buddy_of['buddy_column']	=> $buddy->get_pkey()
+			);
+		}
+	}
+	
+	public function insert_batch($data, $table = '')
+	{
+		if ($table == '')
+		{
+			$table = $this->table;
 		}
 		
-		return $res;
+		$this->db->insert_batch($table, $data);
 	}
 	
 	public function update()
@@ -709,43 +658,86 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		$res = FALSE;
 
 		if ($this->updated_field !== '')
-			$this->krak_obj->{$this->updated_field} = date('Y-m-d H:i:s', time());
-			
+		{
+			$this->{$this->updated_field} = date('Y-m-d H:i:s', time());
+		}
+		
 		$pkey = $this->get_pkey();
 		
-		if ($pkey !== NULL)	// be careful, if you don't have an existing object or other where's then this will update the entire table!!!
+		if ($pkey == NULL)
 		{
-			$this->db->where($this->primary_key, $this->get_pkey());
+			return FALSE;
 		}
-
-		// makes krak_obj only hold values in the field array
-		$this->validate_krak_obj();
-
-		$res = $this->db->update($this->table, $this->krak_obj);
-		$this->krak_obj = new stdClass();	// for sure needed because we don't user to worry about unsetting values they don't want updated
+		
+		// makes krak_data only hold values in the field array
+		$krak_data = array()
+		$this->build_krak_data($krak_data);
+		
+		$res = $this->db->update($this->table, $krak_data);
+		
+		$this->clear();
+		
+		//$this->krak_obj = new stdClass();	// for sure needed because we don't user to worry about unsetting values they don't want updated
 		// don't unset the iter because we may be updating objects from a get (in a loop)
 		
 		$this->trigger(self::EVENT_AFTER_UPDATE);
 		return $res;
 	}
 	
-	public function delete(Krak &$rel_obj = NULL)
+	public function update_set()
 	{
-		if ($rel_obj !== NULL)
-			return $this->delete_related($rel_obj);
+		$this->trigger(self::EVENT_BEFORE_UPDATE);
+		$res = FALSE;
+
+		if ($this->updated_field !== '')
+		{
+			$this->{$this->updated_field} = date('Y-m-d H:i:s', time());
+		}
+
+		// makes krak_data only hold values in the field array
+		$krak_data = array()
+		$this->build_krak_data($krak_data);
+
+		$res = $this->db->update($this->table, $krak_data);
 		
+		$this->clear();
+
+		$this->trigger(self::EVENT_AFTER_UPDATE);
+		return $res;
+	}
+	
+	public function delete()
+	{	
 		$this->trigger(self::EVENT_BEFORE_DELETE);
 		$res = FALSE;
 		
 		$pkey = $this->get_pkey();
 		
-		if ($pkey !== NULL)	// don't worry, CI will make sure there is a where clause before running a delete
+		if ($pkey == NULL)
 		{
-			$this->db->where($this->primary_key, $pkey);
+			return FALSE;
 		}
 		
+		$this->db->where($this->primary_key, $pkey);
 		$res = $this->db->delete($this->table);
 		$this->krak_obj = new stdClass();
+		// same as update, don't destroy iterator
+		
+		$this->trigger(self::EVENT_AFTER_DELETE);
+		return $res;
+	}
+	
+	public function delete_set()
+	{	
+		$this->trigger(self::EVENT_BEFORE_DELETE);
+		$res = FALSE;
+		
+		// CI will throw error if you run a delete with no where clause, so this allow 
+		// will allow you to delete an entire table
+		$this->db->where('1 = 1');
+		$res = $this->db->delete($this->table);
+
+		$this->clear();
 		// same as update, don't destroy iterator
 		
 		$this->trigger(self::EVENT_AFTER_DELETE);
@@ -855,7 +847,9 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		}
 			
 		foreach ($event_types as $et)
+		{
 			$this->event_queues[$et][] = $callback;
+		}
 	}
 	
 	public function remove_event_listener($callback, $event_types = '', $use_this = TRUE)
@@ -893,10 +887,15 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	
 	public function clear()
 	{
-		foreach (self::$fields as $field)
+		foreach ($this->fields as $field)
 		{
 			unset($this->{$field});
 		}
+	}
+	
+	public function set_iterator($iter)
+	{
+		$this->iter_class = 'Iterator\\' . $iter;
 	}
 	
 	public function get_krak_bundle()
@@ -940,7 +939,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	private function build_krak_data(&$krak_data)
 	{
 		$valid_krak = array();
-		foreach (self::$fields as $field)
+		foreach (this->$fields as $field)
 		{
 			if (property_exists($this, $field))
 			{
@@ -969,6 +968,11 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 	
 	private function get_pkey()
 	{
+		return $this->{$this->primary_key};
+	}
+	
+	/*private function get_pkey()
+	{
 		if (property_exists($this->krak_obj, $this->primary_key))
 		{
 			return $this->krak_obj->{$this->primary_key};
@@ -993,33 +997,7 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		}
 		
 		return NULL;
-	}
-	
-	private function has_alias($name, $has_one = TRUE)
-	{
-		if ($has_one)
-		{
-			foreach (self::$aliases[$name] as $class)
-			{
-				if (array_key_exists($class, $this->has_one))
-				{
-					return TRUE;
-				}
-			}
-		}
-		else
-		{
-			foreach (self::$aliases[$name] as $class)
-			{
-				if (array_key_exists($class, $this->has_many))
-				{
-					return TRUE;
-				}
-			}
-		}
-	
-		return FALSE;
-	}
+	}*/
 	
 	/* I T E R A T O R  A G G R E G A T E   M E T H O D S */
 	

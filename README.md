@@ -6,8 +6,30 @@ Simple ORM for CI 3.0
 # TODO
 
 - Finish implementing latest rendition of Krak\Model
-    - finish related getting,saving,deleting
+	- <s>related get</s>
+	- <s>saveing relations</s>
+	- deleting relations
+	- accessing join table
+	- finish mapping out how save, get, and delete work without krak obj
+	- adding syntactic sugar for saving, deleting, and getting relations
+	- Add the unbuffered iterator for Krak
+	- <s>Add the buffered iterator for Krak</s>
 - Create Result class
+	-	add ability for Krak\Result to support all of the same methods,
+		so we need to create duplicate methods in Krak\Model to allow for syntactic sugar
+		for Krak\Results
+- Finish Documentation
+	- api
+	- Relationships
+	- Krak in Controllers
+	- Using Krak
+	- Streamlining Krak
+	- How Krak works
+- Testing
+	- Test Krak\model: getting, saving, deleting, related material
+	- Test the iterators
+	- Test Result class
+	- Profile against older versions of Krak (krakatoa, qb_model) and Datamapper
 
 # Sample World
 
