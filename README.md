@@ -6,14 +6,14 @@ Simple ORM for CI 3.0
 # TODO
 
 - Finish implementing latest rendition of Krak\Model
-	- <s>related get</s>
-	- <s>saveing relations</s>
+	- <strike>related get</strike>
+	- <strike>saveing relations</strike>
 	- deleting relations
 	- accessing join table
 	- finish mapping out how save, get, and delete work without krak obj
 	- adding syntactic sugar for saving, deleting, and getting relations
 	- Add the unbuffered iterator for Krak
-	- <s>Add the buffered iterator for Krak</s>
+	- <strike>Add the buffered iterator for Krak</strike>
 - Create Result class
 	-	add ability for Krak\Result to support all of the same methods,
 		so we need to create duplicate methods in Krak\Model to allow for syntactic sugar
