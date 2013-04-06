@@ -540,8 +540,80 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		return $this;
 	}
 	
-	public function save()
+	public function save($buddy = NULL, &$data = array(), $name = '')
 	{	
+		// check to see if we are really trying to save a relation
+		if ($buddy != NULL)
+		{
+			/*
+			 * We don't want to run any more querires than we have to
+			 * if $this is parent, and is saving a bunch of children, then we need
+			 * to run a query for every child to update.
+			 * if $this is a child, and is saving a bunch of parents, then we only need
+			 * to save $this once
+			 */
+			if (is_array($buddy))
+			{
+				$statuses = array();
+				
+				foreach ($buddy as $name => $obj)
+				{
+					if (is_string($key))
+					{
+						$status = $this->save_relation($obj, $data, $key);
+					}
+					else
+					{
+						$status = $this->save_relation($obj, $data);
+					}
+					
+					// if I'm parent, then we need to update child, no matter
+					if ($status == 0)
+					{
+						$obj->save();
+					}
+					
+					$status[$status] = TRUE;
+				}
+				
+				if (isset($status[1]))
+				{
+					$this->save();
+				}
+				
+				if (isset($status[2]))
+				{
+					foreach ($data as $table => $save_data)
+					{
+						$this->insert_batch($save_data, $table);
+					}
+				}
+			}
+			else
+			{
+				$status = $this->save_relation($buddy, $data, $name);
+				
+				// update buddy
+				if ($status == 0)
+				{
+					$buddy->save();
+				}
+				else if ($status == 1) // update this
+				{
+					$this->save();
+				}
+				else if ($status == 2) // update join table
+				{
+					foreach ($data as $table => $save_data)
+					{
+						$this->insert_batch($save_data, $table);
+					}
+				}
+			}
+			
+			return;
+		}
+	
 		/*
 		 * Are we saving or updating?
 		 * if we have already run a get statement and the primary key field exists then we are updating
@@ -586,27 +658,8 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		return ($res) ? $this->db->insert_id() : FALSE;
 	}
 
-	public function save_relation($buddy, $name = '', &$data = array())
+	public function save_relation(&$buddy, &$data = array(), $name = '')
 	{
-		if (is_array($buddy))
-		{
-			foreach ($buddy as $key => $value)
-			{
-				if (is_string($key))
-				{
-					$data[$key] = array();
-					$this->save_relation($buddy, $key, $data[$key]);
-				}
-				else
-				{
-					$data[$buddy->model] = array();
-					$this->save_relation($buddy, '', $data[$buddy->model]);
-				}
-			}
-			
-			return;
-		}
-	
 		if ($name == '')
 		{
 			$name = $buddy->model;
@@ -615,6 +668,8 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		if (array_key_exists($name, $this->parent_of))
 		{
 			$buddy->{$this->parent_of[$name]['this_column']} = $this->get_pkey();
+			
+			return 0;
 		}
 		else if (array_key_exists($name, $this->child_of))
 		{
@@ -624,7 +679,9 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 				$this->child_of[$name]['parent_column'] = $buddy->model . '_' . $buddy->primary_key;
 			}
 			
-			$this->{$this->child_of[$name]['parent_column']} = $buddy->get_pkey();		
+			$this->{$this->child_of[$name]['parent_column']} = $buddy->get_pkey();
+			
+			return 1;
 		}
 		else if (array_key_exists($name, $this->buddy_of))
 		{
@@ -639,11 +696,15 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
 			}
 		
-			$data[] = array(
+			$data[$this->buddy_of[$name]['join_table']][] = array(
 				$this->buddy_of['this_column']	=> $this->get_pkey(),
 				$this->buddy_of['buddy_column']	=> $buddy->get_pkey()
 			);
+			
+			return 2;
 		}
+		
+		return 3;
 	}
 	
 	public function insert_batch($data, $table = '')
@@ -679,8 +740,6 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		
 		$res = $this->db->update($this->table, $krak_data);
 		
-		$this->clear();
-		
 		//$this->krak_obj = new stdClass();	// for sure needed because we don't user to worry about unsetting values they don't want updated
 		// don't unset the iter because we may be updating objects from a get (in a loop)
 		
@@ -710,8 +769,94 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		return $res;
 	}
 	
-	public function delete()
+	public function delete($buddy = NULL, &$data = array(), $name = '')
 	{	
+		// check to see if we are really trying to delete a relation
+		if ($buddy != NULL)
+		{	
+			/*
+			 * We don't want to run any more querires than we have to
+			 * if $this is parent, and is saving a bunch of children, then we need
+			 * to run a query for every child to update.
+			 * if $this is a child, and is saving a bunch of parents, then we only need
+			 * to save $this once
+			 */
+			if (is_array($buddy))
+			{
+				$statuses = array();
+				
+				foreach ($buddy as $name => $obj)
+				{
+					if (is_string($key))
+					{
+						$status = $this->delete_relation($obj, $data, $key);
+					}
+					else
+					{
+						$status = $this->delete_relation($obj, $data);
+					}
+					
+					// if I'm parent, then we need to update child, no matter
+					if ($status == 0)
+					{
+						$obj->save();
+					}
+					
+					$status[$status] = TRUE;
+				}
+				
+				if (isset($status[1]))
+				{
+					$this->save();
+				}
+				
+				if (isset($status[2]))
+				{
+					foreach ($data as $table => $save_data)
+					{
+						$this->insert_batch($save_data, $table);
+					}
+				}
+			}
+			else
+			{
+				$status = $this->delete_relation($buddy, $data, $name);
+				
+				// update buddy
+				if ($status == 0)
+				{
+					$buddy->save();
+				}
+				else if ($status == 1) // update this
+				{
+					$this->save();
+				}
+				else if ($status == 2) // update join table
+				{
+					$where_string = '';
+					
+					foreach ($data as $table => $save_data)
+					{
+						foreach ($save_data as $where_data)
+						{
+							$where_string .= '(';
+							
+							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data)) . ' AND ';
+							next($where_data);
+							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data));
+										
+							$where_string .= ') OR ';
+						}
+						
+						$this->db->where(substr($where_string, 0, -4))->delete($table);
+					}
+				}
+			}
+			
+			return;
+		}
+	
+	
 		$this->trigger(self::EVENT_BEFORE_DELETE);
 		$res = FALSE;
 		
@@ -724,7 +869,6 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		
 		$this->db->where($this->primary_key, $pkey);
 		$res = $this->db->delete($this->table);
-		$this->krak_obj = new stdClass();
 		// same as update, don't destroy iterator
 		
 		$this->trigger(self::EVENT_AFTER_DELETE);
@@ -776,61 +920,62 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 		return $res;
 	}
 	
-	public function delete_related(Krak &$other_obj)
+	public function delete_relation($buddy, &$data = array(), $name = '')
 	{
-		$res = FALSE;
-		
-		// pretty much the same code as save_related except we set to NULL
-		// determine the relationships
-		
-		// $rel has one of this
-		// e.g. user has one country
-		// table -> users
-		// buddy_column -> country_id
-		// update users
-		// set country_id = {country_id_val}
-		// where {primary_key} = {user_id_val}
-		
-		if (array_key_exists($this->model, $rel_obj->has_one))
+		if (is_array($buddy))
 		{
-			$a = array($rel_obj->has_one[$this->model]['buddy_column'] => NULL);
-			$res = $this->db->update($rel_obj->table, $a, array($rel_obj->primary_key => $rel_obj->get_pkey()));
+			foreach ($buddy as $key => $value)
+			{
+				if (is_string($key))
+				{
+					$this->delete_relation($buddy, $key, $data);
+				}
+				else
+				{
+					$this->delete_relation($buddy, '', $data);
+				}
+			}
 			
-			if ($res === FALSE)
-				return FALSE;
+			return;
 		}
 	
-		// this has one of $rel
-		
-		if (array_key_exists($rel_obj->model, $this->has_one))
+		if ($name == '')
 		{
-			$a = array($this->has_one[$rel_obj->model]['buddy_column'] => NULL);
-			$res = $this->db->update($this->table, $a, array($this->primary_key => $this->get_pkey()));
-		
-			if ($res === FALSE)
-			{
-				return FALSE;
-			}
+			$name = $buddy->model;
 		}
 		
-		// many to many now, we don't need to worry about a many-to-one or one-to-many because
-		// the obj that has_many doesn't have any join fields
-		if (array_key_exists($rel_obj->model, $this->has_many) && array_key_exists($this->model, $rel_obj->has_many))
+		if (array_key_exists($name, $this->parent_of))
 		{
-			$rel_data = $this->has_many[$rel_obj->model];
-			$full_table = $rel_data['join_table'];
-			
-			if ($full_table == '')
+			$buddy->{$this->parent_of[$name]['this_column']} = NULL;
+		}
+		else if (array_key_exists($name, $this->child_of))
+		{
+			// parent_column may not have been set, so let's set now if it hasn't
+			if ($this->child_of[$name]['parent_column'] == '')
 			{
-				$full_table = ($rel_obj->table < $this->table) ? $rel_obj->table . '_' . $this->table : $this->table . '_' . $rel_obj->table;
-				$rel_data['join_table'] = $full_table;
+				$this->child_of[$name]['parent_column'] = $buddy->model . '_' . $buddy->primary_key;
 			}
 			
-			$a = array($rel_data['this_colum'] => $this->get_pkey(), $rel_data['buddy_column'] => $rel_obj->get_pkey());
-			$res = $this->db->delete($full_table, $a);
+			$this->{$this->child_of[$name]['parent_column']} = NULL;	
 		}
+		else if (array_key_exists($name, $this->buddy_of))
+		{
+			// The buddy values may not have been set, so let's set them now
+			if ($this->buddy_of[$name]['buddy_column'] == '')
+			{
+				$this->buddy_of[$name]['buddy_column'] = $buddy->model . '_' . $buddy->primary_key;
+			}
+			
+			if ($this->buddy_of[$name]['join_table'] == '')
+			{
+				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+			}
 		
-		return $res;
+			$data[$this->buddy_of[$name]['join_table']][] = array(
+				$this->buddy_of['this_column']	=> $this->get_pkey(),
+				$this->buddy_of['buddy_column']	=> $buddy->get_pkey()
+			);
+		}
 	}
 	
 	public function add_event_listener($callback, $event_types = '', $use_this = TRUE)
