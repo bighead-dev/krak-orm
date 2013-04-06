@@ -13,14 +13,14 @@ After the Todo's and testing, we can allow it to be used.
 Things that need to get done before Krak can start testing
 
 - Finish implementing latest rendition of Krak\Model
-	- <strike>related get</strike>
-	- <strike>saveing relations</strike>
-	- deleting relations
-	- <strike>finish mapping out how save, get, and delete work without krak obj</strike>
-	- adding syntactic sugar for saving, deleting, and getting relations
-	- <strike>Add the buffered iterator for Krak</strike>
-- <strike>Create Result class</strike>
-	-	<strike>add ability for Krak\Result to support all of the same methods</strike>
+	- [x] related get
+	- [x] saveing relations
+	- [ ] deleting relations
+	- [x] finish mapping out how save, get, and delete work without krak obj
+	- [ ] adding syntactic sugar for saving, deleting, and getting relations
+	- [x] Add the buffered iterator for Krak
+- [x] Create Result class
+	- [x] add ability for Krak\Result to support all of the same methods
 - Testing
 	- Test Krak\model: getting, saving, deleting, related material
 	- Test the iterators
