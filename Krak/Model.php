@@ -594,13 +594,17 @@ abstract class Model implements IteratorAggregate, ArrayAccess, Countable
 			{
 				if (is_string($key))
 				{
-					$this->save_relation($buddy, $key, $data);
+					$data[$key] = array();
+					$this->save_relation($buddy, $key, $data[$key]);
 				}
 				else
 				{
-					$this->save_relation($buddy, '', $data);
+					$data[$buddy->model] = array();
+					$this->save_relation($buddy, '', $data[$buddy->model]);
 				}
 			}
+			
+			return;
 		}
 	
 		if ($name == '')

@@ -3,21 +3,36 @@ Krak
 
 Simple ORM for CI 3.0
 
+# Roadmap
+
+We need to finish all of the Todo items before we can start testing the **hell** of Krak.
+After the Todo's and testing, we can allow it to be used.
+
 # TODO
+
+Things that need to get done before Krak can start testing
 
 - Finish implementing latest rendition of Krak\Model
 	- <strike>related get</strike>
 	- <strike>saveing relations</strike>
 	- deleting relations
-	- accessing join table
-	- finish mapping out how save, get, and delete work without krak obj
+	- <strike>finish mapping out how save, get, and delete work without krak obj</strike>
 	- adding syntactic sugar for saving, deleting, and getting relations
-	- Add the unbuffered iterator for Krak
 	- <strike>Add the buffered iterator for Krak</strike>
-- Create Result class
-	-	add ability for Krak\Result to support all of the same methods,
-		so we need to create duplicate methods in Krak\Model to allow for syntactic sugar
-		for Krak\Results
+- <strike>Create Result class</strike>
+	-	<strike>add ability for Krak\Result to support all of the same methods</strike>
+- Testing
+	- Test Krak\model: getting, saving, deleting, related material
+	- Test the iterators
+	- Test Result class
+	- Profile against older versions of Krak (krakatoa, qb_model) and Datamapper
+
+# Wishlist
+
+The wishlist are things that don't need to be finished to get a stable version of out into the
+world but are things that would make Krak really nice.
+
+- Optimize the result class
 - Finish Documentation
 	- api
 	- Relationships
@@ -25,11 +40,8 @@ Simple ORM for CI 3.0
 	- Using Krak
 	- Streamlining Krak
 	- How Krak works
-- Testing
-	- Test Krak\model: getting, saving, deleting, related material
-	- Test the iterators
-	- Test Result class
-	- Profile against older versions of Krak (krakatoa, qb_model) and Datamapper
+- Accessing join table
+- Add the unbuffered iterator for Krak
 
 # Sample World
 
@@ -162,6 +174,47 @@ that relationship from the Rider model, then you *don't* need to specify that Ri
 in the Rider\Video model. Same goes for the Rider\Video model. If you specify that Rider\Video is a child of
 Rider and only access that relationship from Rider\Video then you don't need to specify that Rider is a parent
 of Rider\Video in the Rider model.
+
+## Saving relationships
+
+````php
+$r = new Rider();
+$r->where('id', 1)->get();
+
+$d = new Division();
+$d->where('id', 1)->get();
+
+$r->save($d);
+
+/*
+ * we actually only need the primary keys, so if you already now what your primary key is,
+ * there is no need to run a get. The following code also works and saves you multiple queries
+ */
+ 
+$r = new Rider();
+$r->id = 1;
+
+$d = new Division();
+$d->id = 1;
+
+$r->save($d);
+
+// save many relationships at the same time like so
+
+// cloning an existing object is always faster than reconstructing an object. Always try to clone if you can
+
+$d0 = clone $d;
+$d1 = clone $d;
+$d2 = clone $d;
+
+$d0->id = 2;
+$d1->id = 3;
+$d2->id = 4;
+
+$r->save(array($d0, $d1, $d2));
+
+
+````
 
 # Advanced Relationships
 
