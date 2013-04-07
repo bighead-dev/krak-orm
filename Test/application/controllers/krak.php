@@ -24,6 +24,7 @@ class Krak extends CI_Controller
 		$this->test_save();
 		$this->test_update();
 		$this->test_get();
+		$this->test_related();
 		$this->db->krak_debug = FALSE;
 		
 		//$this->db->query('TRUNCATE TABLE riders');
@@ -81,6 +82,58 @@ class Krak extends CI_Controller
 		$r[0]->data = '129e';
 		$r[0]->save();
 		$r[1]->delete();
+		$r[1]->get();
+		echo $r[1][0]->data . PHP_EOL;
+		
+		$r->get(10, 10);
+		
+		echo "DELETING ALL\N";
+		$r->delete_all();
+		
+		foreach ($r as $ro)
+		{
+			$ro->data = 'yo00';
+			$ro->delete();
+		}
+	}
+	
+	public function test_related()
+	{
+		$v = new Rider\Video();
+		$v->data = '3';
+		$r = new Rider();
+		$r->id = 1;
+		//$r->save_relation($v);
+		//echo $v->rider_id . PHP_EOL;
+		$r->save($v);
+		
+		$r->rider_video->get();
+		$v->id = 3;
+		
+		$r->id = 58;
+		$v->save_relation($r);
+		echo $v->rider_id . PHP_EOL;
+		
+		//$v->rider_id = 3;
+		//$v->rider->get();
+		
+		$d = new Division();
+		$d->data = 'asd';
+		$id = $d->save();
+		$d->id = $id;
+		
+		$data = array();
+		$r->save_relation($d, $data);
+		print_r($data);
+		
+		$v->id = 10;
+		$r->save(array($d, $v));
+		$r->delete($v);
+		
+		$data = array();
+		$r->delete($d);
+		
+		//$r->delete(array($d, $v));
 	}
 }
 

@@ -81,9 +81,9 @@ $query_builder = TRUE;
 
 $db['default'] = array(
 	'dsn'	=> '',
-	'hostname' => 'boer.bigheadtechnology.net',
-	'username' => 'root',
-	'password' => 'broccoli^92609',
+	'hostname' => '',
+	'username' => '',
+	'password' => '',
 	'database' => 'krak_test_db',
 	'dbdriver' => 'mysqli',
 	'dbprefix' => '',
