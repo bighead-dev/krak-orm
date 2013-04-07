@@ -1,3 +1,3 @@
 install:
-	cp -r Krak Test/application/third_party/
-	cp config.php Test/application/config/krak.php
+	cp -r Krak test/application/third_party/
+	cp config/krak.php test/application/config/krak.php
