@@ -57,17 +57,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	protected static $extension_methods	= array();
 	
 	private static $has_init	= FALSE;
-	public static $iter_class	= '';
-	//private static $aliases		= array();
-	//private static $krak_fields	= array();
-
+	private static $iter_class	= '';
+	
 	/* I N S T A N C E   P R O P E R T I E S */
 	protected $fields = array();
 
 	protected $model			= '';
 	protected $table			= '';
-	//protected $has_one			= array();
-	//protected $has_many			= array();
 	protected $parent_of		= array();
 	protected $child_of			= array();
 	protected $buddy_of			= array();
@@ -81,7 +77,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	private $is_related			= FALSE;
 	private $related_model		= NULL;
 	private $related_name		= '';
-	private $related_models		= array();
 	private $class_name			= '';
 	
 	// iterator related variables
@@ -337,8 +332,10 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			$child->related_name	= $name;
 		
 			// let's do some validation
-			if (in_array($this->parent_of[$name]['this_column'], $child->fields))
+			if (!in_array($this->parent_of[$name]['this_column'], $child->fields))
 			{
+				print_r($this->parent_of[$name]['this_column']);
+				print_r($child->fields);
 				show_error('Krak Error: Child object doesn\'t contain foreign key column to this parent. Parent = ' . $this->class_name . ', Child = ' . $child->class_name);
 				die();
 			}
@@ -360,7 +357,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			}
 		
 			// let's do some validation
-			if (in_array($this->child_of[$name]['parent_column'], $this->fields))
+			if (!in_array($this->child_of[$name]['parent_column'], $this->fields))
 			{
 				show_error('Krak Error: Child object doesn\'t contain foreign key column to this parent. Parent = ' . $parent->class_name . ', Child = ' . $this->class_name);
 				die();
@@ -490,7 +487,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			 */
 			
 			// e.g $this->db->where('id', $video->rider_id);
-			$this->db->where($this->primary_key, $this->related_model->{$this->related_model->child_of[$this->realted_name]['parent_column']});
+			$this->db->where($this->primary_key, $this->related_model->{$this->related_model->child_of[$this->related_name]['parent_column']});
 		}
 		else if (array_key_exists($this->related_name, $this->related_model->buddy_of))
 		{
@@ -537,7 +534,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return $this;
 	}
 	
-	public function save($buddy = NULL, &$data = array(), $name = '')
+	public function save($buddy = NULL, $name = '')
 	{	
 		// check to see if we are really trying to save a relation
 		if ($buddy != NULL)
@@ -555,9 +552,9 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				
 				foreach ($buddy as $name => $obj)
 				{
-					if (is_string($key))
+					if (is_string($name))
 					{
-						$status = $this->save_relation($obj, $data, $key);
+						$status = $this->save_relation($obj, $data, $name);
 					}
 					else
 					{
@@ -570,15 +567,15 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 						$obj->save();
 					}
 					
-					$status[$status] = TRUE;
+					$statuses[$status] = TRUE;
 				}
 				
-				if (isset($status[1]))
+				if (isset($statuses[1]))
 				{
 					$this->save();
 				}
 				
-				if (isset($status[2]))
+				if (isset($statuses[2]))
 				{
 					foreach ($data as $table => $save_data)
 					{
@@ -690,12 +687,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			if ($this->buddy_of[$name]['join_table'] == '')
 			{
-				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+				$this->buddy_of[$name]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
 			}
 		
 			$data[$this->buddy_of[$name]['join_table']][] = array(
-				$this->buddy_of['this_column']	=> $this->get_pkey(),
-				$this->buddy_of['buddy_column']	=> $buddy->get_pkey()
+				$this->buddy_of[$name]['this_column']	=> $this->get_pkey(),
+				$this->buddy_of[$name]['buddy_column']	=> $buddy->get_pkey()
 			);
 			
 			return 2;
@@ -739,8 +736,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		$res = $this->db->where($this->primary_key, $pkey)->update($this->table, $krak_data);
 		
-		//$this->krak_obj = new stdClass();	// for sure needed because we don't user to worry about unsetting values they don't want updated
-		// don't unset the iter because we may be updating objects from a get (in a loop)
+		$this->clear();
 		
 		$this->trigger(self::EVENT_AFTER_UPDATE);
 		return $res;
@@ -768,11 +764,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return $res;
 	}
 	
-	public function delete($buddy = NULL, &$data = array(), $name = '')
-	{	
+	public function delete($buddy = NULL, $name = '')
+	{
 		// check to see if we are really trying to delete a relation
 		if ($buddy != NULL)
-		{	
+		{
 			/*
 			 * We don't want to run any more querires than we have to
 			 * if $this is parent, and is saving a bunch of children, then we need
@@ -786,9 +782,9 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				
 				foreach ($buddy as $name => $obj)
 				{
-					if (is_string($key))
+					if (is_string($name))
 					{
-						$status = $this->delete_relation($obj, $data, $key);
+						$status = $this->delete_relation($obj, $data, $name);
 					}
 					else
 					{
@@ -801,15 +797,15 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 						$obj->save();
 					}
 					
-					$status[$status] = TRUE;
+					$statuses[$status] = TRUE;
 				}
 				
-				if (isset($status[1]))
+				if (isset($statuses[1]))
 				{
 					$this->save();
 				}
 				
-				if (isset($status[2]))
+				if (isset($statuses[2]))
 				{
 					foreach ($data as $table => $save_data)
 					{
@@ -831,11 +827,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 					$this->save();
 				}
 				else if ($status == 2) // update join table
-				{
-					$where_string = '';
-					
+				{		
 					foreach ($data as $table => $save_data)
 					{
+						$where_string = '';
+						
 						foreach ($save_data as $where_data)
 						{
 							$where_string .= '(';
@@ -914,8 +910,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			$this->db->where_in($this->primary_key, $where_in);
 			$res = $this->db->delete($this->table);
 			$this->clear();
+			$this->iter			= NULL;
+			$this->last_res		= NULL;
+			$this->first_row	= NULL;
 		}
-		
+			
 		return $res;
 	}
 	
@@ -946,6 +945,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		if (array_key_exists($name, $this->parent_of))
 		{
 			$buddy->{$this->parent_of[$name]['this_column']} = NULL;
+			
+			return 0;
 		}
 		else if (array_key_exists($name, $this->child_of))
 		{
@@ -955,7 +956,9 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$this->child_of[$name]['parent_column'] = $buddy->model . '_' . $buddy->primary_key;
 			}
 			
-			$this->{$this->child_of[$name]['parent_column']} = NULL;	
+			$this->{$this->child_of[$name]['parent_column']} = NULL;
+			
+			return 1;
 		}
 		else if (array_key_exists($name, $this->buddy_of))
 		{
@@ -967,14 +970,18 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			if ($this->buddy_of[$name]['join_table'] == '')
 			{
-				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+				$this->buddy_of[$name]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
 			}
-		
+			
 			$data[$this->buddy_of[$name]['join_table']][] = array(
-				$this->buddy_of['this_column']	=> $this->get_pkey(),
-				$this->buddy_of['buddy_column']	=> $buddy->get_pkey()
+				$this->buddy_of[$name]['this_column']	=> $this->get_pkey(),
+				$this->buddy_of[$name]['buddy_column']	=> $buddy->get_pkey()
 			);
+			
+			return 2;
 		}
+		
+		return 3;
 	}
 	
 	public function add_event_listener($callback, $event_types = '', $use_this = TRUE)
@@ -1119,34 +1126,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return $this->{$this->primary_key};
 	}
 	
-	/*private function get_pkey()
-	{
-		if (property_exists($this->krak_obj, $this->primary_key))
-		{
-			return $this->krak_obj->{$this->primary_key};
-		}
-		else if ($this->iter !== NULL)
-		{
-			return $this->iter->current()->{$this->primary_key};
-		}
-		
-		return NULL;
-	}
-	
-	private function get_pkey_save()
-	{
-		if (property_exists($this->krak_obj, $this->primary_key))
-		{
-			return $this->krak_obj->{$this->primary_key};
-		}
-		else if ($this->iter !== NULL)
-		{
-			return $this->iter->current()->{$this->primary_key};
-		}
-		
-		return NULL;
-	}*/
-	
 	/* I T E R A T O R  A G G R E G A T E   M E T H O D S */
 	
 	public function getIterator()
@@ -1156,7 +1135,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			return $this->iter;
 		}
 			
-		return new ArrayIterator();
+		return new \ArrayIterator();
 	}
 	
 	/* Array Access Methods */
