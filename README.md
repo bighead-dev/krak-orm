@@ -15,16 +15,16 @@ Things that need to get done before Krak can start testing
 - Finish implementing latest rendition of Krak\Model
 	- [x] related get
 	- [x] saveing relations
-	- [ ] deleting relations
+	- [x] deleting relations
 	- [x] finish mapping out how save, get, and delete work without krak obj
-	- [ ] adding syntactic sugar for saving, deleting, and getting relations
+	- [x] adding syntactic sugar for saving, deleting, and getting relations
 	- [x] Add the buffered iterator for Krak
 - [x] Create Result class
 	- [x] add ability for Krak\Result to support all of the same methods
 - Testing
-	- Test Krak\model: getting, saving, deleting, related material
-	- Test the iterators
-	- Test Result class
+	- [x] Test Krak\model: getting, saving, deleting, related material
+	- [x] Test the iterators
+	- [x] Test Result class
 	- Profile against older versions of Krak (krakatoa, qb_model) and Datamapper
 
 # Wishlist
