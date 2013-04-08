@@ -103,7 +103,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			}
 			
 			self::$iter_class = 'Krak\Iterator\\' . ((isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED);
-			echo self::$iter_class . PHP_EOL;
 			$this->_load_extensions();
 			
 			self::$has_init = TRUE;
