@@ -242,7 +242,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 
             if (!file_exists($file))
             {
-                show_error('Krak Error: loading extension ' . $extension . ': File not found.');
+            	$file = strtolower($file);
+                
+                if (!file_exists($file))
+                {
+                	show_error('Krak Error: loading extension ' . $extension . ': File not found.');
+                }
             }
 
             require_once $file;
@@ -281,7 +286,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		}
 	}
 
-	public static function model_autoloader($class)
+	public static function model_autoloader($class, $ret = false)
 	{
 		$file  = '';
 		$namespace = '';
@@ -299,7 +304,21 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if (file_exists($path))
 		{
-			require_once $path;
+			if ($ret == false)
+			{
+				require_once $path;
+			}
+			else
+			{
+				return $path;
+			}
+		}
+		else
+		{
+			if ($ret == true)
+			{
+				return false;
+			}
 		}
 	}
 	
@@ -380,12 +399,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			if ($this->buddy_of[$name]['join_table'] == '')
 			{
-				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+				$this->buddy_of[$name]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
 			}
 			
 			// theres no way to do validation, so we'll just assume everything was setup properly with the join table and return buddy
 			$this->{$name} = $buddy;
-			return $this->buddy;
+			return $this->{$name};
 		}
 		else if ($name == 'fields')
 		{
@@ -1039,6 +1058,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		}
 	}
 	
+	public function get_join_table($other_table)
+	{
+		return ($this->table < $other_table) ? $this->table . '_' . $other_table : $other_table . '_' . $this->table;
+	}
+	
 	public function clear()
 	{
 		foreach ($this->fields as $field)
@@ -1057,8 +1081,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$b					= new Bundle();
 		$b->table			= &$this->table;
 		$b->model			= &$this->model;
-		$b->has_one			= &$this->has_one;
-		$b->has_many		= &$this->has_many;
+		$b->class_name		= &$this->class_name;
+		
+		// indirect modification error if the next two props are assigned by ref
+		$b->parent_of		= &$this->parent_of;
+		$b->child_of		= &$this->child_of;
+		$b->buddy_of		= &$this->buddy_of;
+		
 		$b->primary_key		= &$this->primary_key;
 		$b->created_field	= &$this->created_field;
 		$b->updated_field	= &$this->updated_field;
