@@ -1,8 +1,6 @@
 <?php
 namespace Krak;
 
-defined('BASEPATH') || exit('No direct script access allowed');
-
 abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 {
 	// Iterator Contants

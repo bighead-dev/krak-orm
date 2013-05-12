@@ -1,8 +1,6 @@
 <?php
 namespace Krak;
 
-defined('BASEPATH') || exit('No direct script access allowed');
-
 class Result implements \IteratorAggregate, \ArrayAccess, \Countable
 {
 	protected $krak;

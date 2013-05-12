@@ -1,8 +1,6 @@
 <?php
 namespace Krak\Iterator;
 
-defined('BASEPATH') || exit('No direct script access allowed');
-
 class Buffered extends \ArrayIterator
 {
 	public function __construct($objects, &$krak)
