@@ -6,8 +6,8 @@ defined('BASEPATH') || exit('No direct script access allowed');
 abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 {
 	// Iterator Contants
-	const ITERATOR_BUFFERED		= 'Buffered';
-	const ITERATOR_UNBUFFERED	= 'Unbuffered';
+	const ITERATOR_SIMPLE_BUFFERED	= '\ArrayIterator';
+	const ITERATOR_DEFAULT_BUFFERED	= '\Krak\Iterator\Buffered';
 
 	// Event Constants
 	const EVENT_BEFORE_SAVE		= '_before_save';
@@ -57,17 +57,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	protected static $extension_methods	= array();
 	
 	private static $has_init	= FALSE;
-	public static $iter_class	= '';
-	//private static $aliases		= array();
-	//private static $krak_fields	= array();
-
+	private static $iter_class	= '';
+	
 	/* I N S T A N C E   P R O P E R T I E S */
 	protected $fields = array();
 
 	protected $model			= '';
 	protected $table			= '';
-	//protected $has_one			= array();
-	//protected $has_many			= array();
 	protected $parent_of		= array();
 	protected $child_of			= array();
 	protected $buddy_of			= array();
@@ -81,7 +77,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	private $is_related			= FALSE;
 	private $related_model		= NULL;
 	private $related_name		= '';
-	private $related_models		= array();
 	private $class_name			= '';
 	
 	// iterator related variables
@@ -107,8 +102,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				self::$config = $ci->config->item('Krak');
 			}
 			
-			self::$iter_class = 'Krak\Iterator\\' . ((isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED);
-			echo self::$iter_class . PHP_EOL;
+			self::$iter_class = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_DEFAULT_BUFFERED;
 			$this->_load_extensions();
 			
 			self::$has_init = TRUE;
@@ -248,7 +242,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 
             if (!file_exists($file))
             {
-                show_error('Krak Error: loading extension ' . $extension . ': File not found.');
+            	$file = strtolower($file);
+                
+                if (!file_exists($file))
+                {
+                	show_error('Krak Error: loading extension ' . $extension . ': File not found.');
+                }
             }
 
             require_once $file;
@@ -287,7 +286,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		}
 	}
 
-	public static function model_autoloader($class)
+	public static function model_autoloader($class, $ret = false)
 	{
 		$file  = '';
 		$namespace = '';
@@ -305,7 +304,21 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if (file_exists($path))
 		{
-			require_once $path;
+			if ($ret == false)
+			{
+				require_once $path;
+			}
+			else
+			{
+				return $path;
+			}
+		}
+		else
+		{
+			if ($ret == true)
+			{
+				return false;
+			}
 		}
 	}
 	
@@ -386,12 +399,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			if ($this->buddy_of[$name]['join_table'] == '')
 			{
-				$this->buddy_of[$nane]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
+				$this->buddy_of[$name]['join_table'] = ($this->table < $buddy->table) ? $this->table . '_' . $buddy->table : $buddy->table . '_' . $this->table;
 			}
 			
 			// theres no way to do validation, so we'll just assume everything was setup properly with the join table and return buddy
 			$this->{$name} = $buddy;
-			return $this->buddy;
+			return $this->{$name};
 		}
 		else if ($name == 'fields')
 		{
@@ -741,8 +754,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		$res = $this->db->where($this->primary_key, $pkey)->update($this->table, $krak_data);
 		
-		//$this->krak_obj = new stdClass();	// for sure needed because we don't user to worry about unsetting values they don't want updated
-		// don't unset the iter because we may be updating objects from a get (in a loop)
+		$this->clear();
 		
 		$this->trigger(self::EVENT_AFTER_UPDATE);
 		return $res;
@@ -916,8 +928,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			$this->db->where_in($this->primary_key, $where_in);
 			$res = $this->db->delete($this->table);
 			$this->clear();
+			$this->iter			= NULL;
+			$this->last_res		= NULL;
+			$this->first_row	= NULL;
 		}
-		
+			
 		return $res;
 	}
 	
@@ -1043,6 +1058,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		}
 	}
 	
+	public function get_join_table($other_table)
+	{
+		return ($this->table < $other_table) ? $this->table . '_' . $other_table : $other_table . '_' . $this->table;
+	}
+	
 	public function clear()
 	{
 		foreach ($this->fields as $field)
@@ -1061,8 +1081,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$b					= new Bundle();
 		$b->table			= &$this->table;
 		$b->model			= &$this->model;
-		$b->has_one			= &$this->has_one;
-		$b->has_many		= &$this->has_many;
+		$b->class_name		= &$this->class_name;
+		
+		// indirect modification error if the next two props are assigned by ref
+		$b->parent_of		= &$this->parent_of;
+		$b->child_of		= &$this->child_of;
+		$b->buddy_of		= &$this->buddy_of;
+		
 		$b->primary_key		= &$this->primary_key;
 		$b->created_field	= &$this->created_field;
 		$b->updated_field	= &$this->updated_field;
@@ -1129,34 +1154,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return $this->{$this->primary_key};
 	}
 	
-	/*private function get_pkey()
-	{
-		if (property_exists($this->krak_obj, $this->primary_key))
-		{
-			return $this->krak_obj->{$this->primary_key};
-		}
-		else if ($this->iter !== NULL)
-		{
-			return $this->iter->current()->{$this->primary_key};
-		}
-		
-		return NULL;
-	}
-	
-	private function get_pkey_save()
-	{
-		if (property_exists($this->krak_obj, $this->primary_key))
-		{
-			return $this->krak_obj->{$this->primary_key};
-		}
-		else if ($this->iter !== NULL)
-		{
-			return $this->iter->current()->{$this->primary_key};
-		}
-		
-		return NULL;
-	}*/
-	
 	/* I T E R A T O R  A G G R E G A T E   M E T H O D S */
 	
 	public function getIterator()
@@ -1211,11 +1208,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function count()
 	{
-		if ($this->iter !== NULL)
+		if ($this->last_res !== NULL)
 		{
-			return $this->last_res->num_rows;
+			return $this->last_res->num_rows();
 		}
-			
+		
 		return 0;
 	}
 }

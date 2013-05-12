@@ -47,4 +47,4 @@ $config['extensions'] = array();
 |
 */
 
-$config['iterator'] = 'Buffered';
+//$config['iterator'] = ;

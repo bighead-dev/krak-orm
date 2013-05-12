@@ -21,10 +21,11 @@ class Krak extends CI_Controller
 		//$this->test_init();
 		
 		$this->db->krak_debug = TRUE;
-		$this->test_save();
-		$this->test_update();
-		$this->test_get();
-		$this->test_related();
+		//$this->test_save();
+		//$this->test_update();
+		//$this->test_get();
+		//$this->test_related();
+		$this->test_count();
 		$this->db->krak_debug = FALSE;
 		
 		//$this->db->query('TRUNCATE TABLE riders');
@@ -134,6 +135,14 @@ class Krak extends CI_Controller
 		$r->delete($d);
 		
 		//$r->delete(array($d, $v));
+	}
+	
+	public function test_count()
+	{
+		$r = new Rider();
+		$v = $r->get();
+		echo count($v) . PHP_EOL;
+		echo $v->num_rows() . PHP_EOL;
 	}
 }
 

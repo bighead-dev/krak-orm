@@ -6,8 +6,8 @@ defined('BASEPATH') || exit('No direct script access allowed');
 abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 {
 	// Iterator Contants
-	const ITERATOR_BUFFERED		= 'Buffered';
-	const ITERATOR_UNBUFFERED	= 'Unbuffered';
+	const ITERATOR_SIMPLE_BUFFERED	= '\ArrayIterator';
+	const ITERATOR_DEFAULT_BUFFERED	= '\Krak\Iterator\Buffered';
 
 	// Event Constants
 	const EVENT_BEFORE_SAVE		= '_before_save';
@@ -102,7 +102,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				self::$config = $ci->config->item('Krak');
 			}
 			
-			self::$iter_class = 'Krak\Iterator\\' . ((isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED);
+			self::$iter_class = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_DEFAULT_BUFFERED;
 			$this->_load_extensions();
 			
 			self::$has_init = TRUE;
@@ -1208,11 +1208,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function count()
 	{
-		if ($this->iter !== NULL)
+		if ($this->last_res !== NULL)
 		{
-			return $this->last_res->num_rows;
+			return $this->last_res->num_rows();
 		}
-			
+		
 		return 0;
 	}
 }
