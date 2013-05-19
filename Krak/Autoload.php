@@ -37,7 +37,7 @@ function model_autoloader($class, $ret = false)
 	// their model names
 
 	$path = BASE_DIR . $file . $class . '.php';
-echo $path . PHP_EOL;	
+
 	if (file_exists($path))
 	{
 		if ($ret == false)

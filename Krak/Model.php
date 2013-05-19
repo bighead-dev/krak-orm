@@ -890,10 +890,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	{	
 		$this->trigger(self::EVENT_BEFORE_DELETE);
 		$res = FALSE;
-		
-		// CI will throw error if you run a delete with no where clause, so this allow 
-		// will allow you to delete an entire table
-		$this->db->where('1 = 1');
+
 		$res = $this->db->delete($this->table);
 
 		$this->clear();
@@ -1214,12 +1211,3 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return 0;
 	}
 }
-
-require_once 'Result.php';
-require_once 'Bundle.php';
-require_once 'Exception.php';
-require_once 'Iterator/Buffered.php';
-require_once 'Model/Join_table.php';
-
-/*** register the loader functions ***/
-spl_autoload_register('\Krak\Model::model_autoloader');
