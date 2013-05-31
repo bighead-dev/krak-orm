@@ -9,7 +9,7 @@ Simple, fast, flexible ORM for CI 3.0.
 2. Move the `Krak/` directory into `./application/third_party/`.
 3. Move `config/krak.php` into `./application/config/`.
 4.	Then just place this piece of code anywhere in your ci installation
-	`require_once './application/third_party/Krak/Model.php'`. At the bottom of the `index.php` file is probably the best
+	`require_once './application/third_party/Krak/Autoloader.php'`. At the bottom of the `index.php` file is probably the best
 
 ## More Info
 
