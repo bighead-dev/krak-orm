@@ -662,7 +662,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$this->iter			= NULL;
 		$this->last_res		= NULL;
 		$this->first_row	= NULL;
-		$this->clear();
 		
 		$this->trigger(self::EVENT_AFTER_SAVE);
 		return ($res) ? $this->db->insert_id() : FALSE;
@@ -724,7 +723,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			$table = $this->table;
 		}
 		
-		$this->db->insert_batch($table, $data);
+		return $this->db->insert_batch($table, $data);
 	}
 	
 	public function update()
@@ -751,8 +750,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		unset($krak_data[$this->primary_key]);
 		
 		$res = $this->db->where($this->primary_key, $pkey)->update($this->table, $krak_data);
-		
-		$this->clear();
 		
 		$this->trigger(self::EVENT_AFTER_UPDATE);
 		return $res;
@@ -1058,6 +1055,20 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return ($this->table < $other_table) ? $this->table . '_' . $other_table : $other_table . '_' . $this->table;
 	}
 	
+	public function get_jt($buddy)
+	{
+		if ($buddy instanceof \Krak\Model)
+		{
+			$other_table = $buddy->table;
+		}
+		else
+		{
+			$other_table = $buddy;
+		}
+		
+		return ($this->table < $other_table) ? $this->table . '_' . $other_table : $other_table . '_' . $this->table;
+	}
+	
 	public function clear()
 	{
 		foreach ($this->fields as $field)
@@ -1116,16 +1127,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	 */
 	private function build_krak_data(&$krak_data)
 	{
-		$valid_krak = array();
 		foreach ($this->fields as $field)
 		{
 			if (property_exists($this, $field))
 			{
-				$valid_krak[$field] = &$this->{$field};
+				$krak_data[$field] = &$this->{$field};
 			}
 		}
-		
-		$krak_data = $valid_krak;
 	}
 	
 	private function trigger($event)
