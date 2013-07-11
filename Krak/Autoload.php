@@ -88,7 +88,7 @@ function model_autoloader($class, $ret = false)
 /*** register the loader functions ***/
 spl_autoload_register('\Krak\model_autoloader');
 
-require_once './application/helpers/inflector_helper.php';
+require_once BASEPATH . 'helpers/inflector_helper.php';
 require_once 'Model.php';
 require_once 'Result.php';
 require_once 'Bundle.php';
