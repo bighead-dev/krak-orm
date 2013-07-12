@@ -10,7 +10,7 @@ require_once 'Iterator/Buffered.php';
 require_once 'Iterator/Simple.php';
 require_once 'Model/Join_table.php';
 
-defined('Krak\USER_PATH') || throw new Exception("USER_PATH constant is not defined");
+defined('Krak\USER_PATH') || define('Krak\USER_PATH', './application/Krak/');
 
 require_once USER_PATH . 'Autoload.php';
 require_once USER_PATH . 'Constants.php';
