@@ -1,6 +1,12 @@
 <?php
 namespace Krak;
 
+/**
+ * Main Krak Class which handles all Krak operations
+ *
+ * @author RJ Garcia <rj@bighead.net>
+ * @package Krak
+ */
 abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 {
 	// Iterator Contants
@@ -97,6 +103,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	public function __construct($id = NULL)
 	{
 		$ci = &get_instance();
+		
+		if (!isset($ci->db))
+		{
+			throw new Exception("CI Database not loaded");
+		}
+		
 		$this->db = &$ci->db;
 		
 		if ( ! self::$has_init)

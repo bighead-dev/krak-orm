@@ -1,11 +1,12 @@
 <?php
-namespace Krak;
+
+namespace Krak\Ext;
 
 class Compile
 {
-	const PREFIX = '5eb3f7dfe7eaf593ba25c96769e56535_';
+	const PREFIX = 'Krak\Ext\Compile_';
 
-	public function compile_fields($krak)
+	public function compile_fields(&$krak)
 	{		
 		$bundle = $krak->get_krak_bundle();
 		$prefix = self::PREFIX;

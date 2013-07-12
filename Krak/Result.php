@@ -1,6 +1,12 @@
 <?php
 namespace Krak;
 
+/**
+ * Simple Result class that allows Krak Model like syntax for result objects
+ *
+ * @author RJ Garcia <rj@bighead.net>
+ * @package Krak
+ */
 class Result
 {
 	protected $_krak_uid;

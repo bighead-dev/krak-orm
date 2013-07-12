@@ -1,20 +1,21 @@
 <?php
 namespace Krak;
 
-/*
- * The base directory to run the autoloading from.
- * Normally it's: APPPATH . 'models/'
- */
-const BASE_DIR = './application/models/';
+require_once BASEPATH . 'helpers/inflector_helper.php';
+require_once 'Exception.php';
+require_once 'Model.php';
+require_once 'Result.php';
+require_once 'Bundle.php';
+require_once 'Iterator/Buffered.php';
+require_once 'Iterator/Simple.php';
+require_once 'Model/Join_table.php';
 
-/*
- * Set this variable to whatever namespace your models are located in
- * Leave empty if in the global namespace.
- * example value: 'Km\\'
- * make sure to keep the backward slash
- */
-const MODEL_NS = '';
-define('MODEL_NS_LEN', strlen(MODEL_NS));
+defined('Krak\USER_PATH') || throw new Exception("USER_PATH constant is not defined");
+
+require_once USER_PATH . 'Autoload.php';
+require_once USER_PATH . 'Constants.php';
+
+define('Krak\MODEL_NS_LEN', strlen(MODEL_NS . '\\'));
 
 function model_autoloader($class, $ret = false)
 {
@@ -87,11 +88,3 @@ function model_autoloader($class, $ret = false)
 
 /*** register the loader functions ***/
 spl_autoload_register('\Krak\model_autoloader');
-
-require_once BASEPATH . 'helpers/inflector_helper.php';
-require_once 'Model.php';
-require_once 'Result.php';
-require_once 'Bundle.php';
-require_once 'Exception.php';
-require_once 'Iterator/Buffered.php';
-require_once 'Model/Join_table.php';

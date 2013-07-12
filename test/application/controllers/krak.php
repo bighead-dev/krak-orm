@@ -7,26 +7,25 @@ class Krak extends CI_Controller
 	public function __construct()
 	{
 		parent::__construct();
-		
-		$this->load->database();
-		
-		require_once './application/third_party/Krak/Model.php';
-		echo 'REQUIRE TEST PASSED!' . PHP_EOL;
 	}
 
 	public function index()
 	{
 		// run the tests here
-		$this->test_autoload();
+		
+		echo 'yeah' . PHP_EOL;
+		require_once './application/third_party/Krak/Autoload.php';
+		$rider = new Rider();
+		//$this->test_autoload();
 		//$this->test_init();
 		
-		$this->db->krak_debug = TRUE;
+		//$this->db->krak_debug = TRUE;
 		//$this->test_save();
 		//$this->test_update();
 		//$this->test_get();
 		//$this->test_related();
-		$this->test_count();
-		$this->db->krak_debug = FALSE;
+		//$this->test_count();
+		//$this->db->krak_debug = FALSE;
 		
 		//$this->db->query('TRUNCATE TABLE riders');
 	}
