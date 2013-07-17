@@ -13,8 +13,8 @@ class Krak extends CI_Controller
 	{
 		// run the tests here
 		
-		echo 'yeah' . PHP_EOL;
 		require_once './application/third_party/Krak/Autoload.php';
+		$this->load->database();
 		$rider = new Rider();
 		//$this->test_autoload();
 		//$this->test_init();

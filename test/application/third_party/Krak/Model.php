@@ -113,11 +113,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if ( ! self::$has_init)
 		{
-			// Load configuration
-			if ($ci->config->load('Krak', TRUE, TRUE))
-			{
-				self::$config = $ci->config->item('Krak');
-			}
+			require USER_PATH . 'Config.php';	// this should always be defined
+			self::$config = $config;
 			
 			self::$iter_func = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
 			$this->_load_extensions();
@@ -140,7 +137,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if ($this->table == '')
 		{
-			$this->table = plural($this->_model, true);
+			$this->table = $this->_model . 's';	// I know, this is shitty, but it'll for most cases and is fast
 		}
 			
 		// if user hasn't already supplied a fields array, then run the query
@@ -260,6 +257,49 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	public static function &get_instance($_uid)
 	{
 		return self::$instances[$_uid];
+	}
+	
+	public static function load_extension($extension)
+	{
+		$path = APPPATH . 'krak/';
+		$file = $path.$extension.'.php';
+		$class = "Krak\\{$extension}";
+		
+		if (!file_exists($file))
+		{
+			$file = strtolower($file);
+			
+			if (!file_exists($file))
+			{
+				show_error('Krak Error: loading extension ' . $extension . ': File not found.');
+			}
+		}
+		
+		require_once $file;
+		
+		if (!class_exists($class))
+		{
+			show_error("Krak Error: Unable to find a class for extension $extension. Looked for class {$class}");
+		}
+		
+		$obj = new $class();
+
+		// look for event functions to put in the event queue
+		foreach (self::$before_after_all as $func)
+		{
+			if (method_exists($obj, $func))
+				$this->add_event_listener(array($obj, $func), $func, FALSE);
+		}
+
+		// Check which methods can be called on this class, and store in array (method_name => class_name)
+		foreach (get_class_methods($class) as $method)
+		{
+			// if two plugins use the same function name, then the latest plugin's function will override the first.
+			if ($method[0] != '_' && is_callable(array($obj, $method)))
+			{
+				self::$extension_methods[$method] = $obj;
+			}
+		}
 	}
 	
 	private function _load_extensions()

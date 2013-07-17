@@ -113,7 +113,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if ( ! self::$has_init)
 		{
-			require_once USER_PATH . 'Config.php';	// this should always be defined
+			require USER_PATH . 'Config.php';	// this should always be defined
 			self::$config = $config;
 			
 			self::$iter_func = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
@@ -137,7 +137,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		if ($this->table == '')
 		{
-			$this->table = plural($this->_model, true);
+			$this->table = $this->_model . 's';	// I know, this is shitty, but it'll for most cases and is fast
 		}
 			
 		// if user hasn't already supplied a fields array, then run the query
