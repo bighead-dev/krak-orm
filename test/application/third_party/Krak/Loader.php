@@ -39,7 +39,7 @@ class Loader implements iLoader
 	 * Registers the current loader to SplAutoloader
 	 */
 	public function register()
-	{print_r($this);
+	{
 		spl_autoload_register(array($this, 'load'));
 	}
 	

@@ -11,4 +11,4 @@ namespace Krak;
 /**
  * Must return an instance of Krak\iLoader
  */
-return new Loader('', './application/models/');
+return new Loader('Km', './application/models/');
