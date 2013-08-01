@@ -60,6 +60,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		self::EVENT_AFTER_DELETE
 	);
 	
+	public static $ext_loader = null;
+	
 	/*
 	public static $bundle	= array(
 		'class_name'	=> '',
@@ -132,17 +134,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		}
 		
 		$this->db = &$ci->db;
-		
-		if ( ! self::$has_init)
-		{
-			require USER_PATH . 'Config.php';	// this should always be defined
-			self::$config = $config;
-			
-			self::$iter_func = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
-			$this->_load_extensions();
-			
-			self::$has_init = TRUE;
-		}
 		
 		// setup the _uid
 		$this->_uid = uniqid('krak_');
@@ -315,20 +306,34 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return self::$instances[$_uid];
 	}
 	
+	public static function init()
+	{
+		if (!self::$has_init)
+		{
+			require USER_PATH . 'Config.php';	// this should always be defined
+			self::$config = $config;
+			
+			self::$iter_func	= (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
+			self::$ext_loader	= new Loader('Krak\Ext', USER_PATH . 'Ext/');
+			
+			// load the extensions
+			foreach ($config['extensions'] as $extension)
+			{
+				self::load_extension($extension);
+			}
+			
+			self::$has_init = TRUE;
+		}
+	}
+	
 	public static function load_extension($extension)
 	{
-		$path = APPPATH . 'krak/';
-		$file = $path.$extension.'.php';
-		$class = "Krak\\{$extension}";
-		
+		$class = 'Krak\Ext\\' . $extension;
+		$file = self::$ext_loader->load($class, true);
+	
 		if (!file_exists($file))
 		{
-			$file = strtolower($file);
-			
-			if (!file_exists($file))
-			{
-				show_error('Krak Error: loading extension ' . $extension . ': File not found.');
-			}
+			throw new Exception("Loading extension {$extension}: File '{$file}' not found.");
 		}
 		
 		require_once $file;
@@ -344,7 +349,9 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		foreach (self::$before_after_all as $func)
 		{
 			if (method_exists($obj, $func))
+			{
 				$this->add_event_listener(array($obj, $func), $func, FALSE);
+			}
 		}
 
 		// Check which methods can be called on this class, and store in array (method_name => class_name)
@@ -411,42 +418,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		if ($this->last_res !== NULL)
 		{
 			$this->last_res->free_result();
-		}
-	}
-
-	public static function model_autoloader($class, $ret = false)
-	{
-		$file  = '';
-		$namespace = '';
-		
-		if ($last_ns_pos = strrpos($class, '\\'))
-		{
-			$namespace = substr($class, 0, $last_ns_pos);
-			$class = substr($class, $last_ns_pos + 1);
-			$file  = str_replace('\\', DIRECTORY_SEPARATOR, $namespace) . DIRECTORY_SEPARATOR;
-		}
-		// don't convert _'s to directory separators, let's let users have underscores in
-		// their model names
-
-		$path = APPPATH . 'models/' . $file . $class . '.php';
-		
-		if (file_exists($path))
-		{
-			if ($ret == false)
-			{
-				require_once $path;
-			}
-			else
-			{
-				return $path;
-			}
-		}
-		else
-		{
-			if ($ret == true)
-			{
-				return false;
-			}
 		}
 	}
 	

@@ -26,3 +26,6 @@ $mloader->register();
 $mpackage = $mloader->get_package();
 
 define('Krak\MODEL_NS_LEN', ($mpackage) ? strlen($mpackage) + 1 : 0);
+
+// now let's initialize Krak
+Model::init();
