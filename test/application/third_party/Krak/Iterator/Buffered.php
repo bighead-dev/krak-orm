@@ -23,17 +23,3 @@ class Buffered extends \ArrayIterator
 		parent::__construct($objects);
 	}
 }
-
-/**
- * The Buffered Iterator Create function.
- *
- * Every iterator has a create function that takes a reference
- * to the main Krak model and returns the ArrayIterator.
- *
- * @author RJ Garcia <rj@bighead.net>
- * @package Krak
- */
-function buffered_create(&$krak)
-{
-	return new Buffered($krak->result(), $krak->get_uid());
-}

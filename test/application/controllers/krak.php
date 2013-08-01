@@ -15,7 +15,15 @@ class Krak extends CI_Controller
 		
 		require_once './application/third_party/Krak/Autoload.php';
 		$this->load->database();
-		$rider = new Rider();
+		
+		
+		//$rider = new \Km\Rider();
+		//$event = new \Km\Event();
+		print_r(\Km\Event::fields());
+		print_r(\Km\Event::bundle());
+		$event = new \Km\Event();
+		$event->kjoin('country', \Krak\Model::JOIN_LEFT);
+		$event->kjoin('event_registration', \Krak\Model::JOIN_RIGHT);
 		//$this->test_autoload();
 		//$this->test_init();
 		

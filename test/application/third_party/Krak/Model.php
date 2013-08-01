@@ -21,6 +21,12 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	const EVENT_BEFORE_DELETE	= '_before_delete';
 	const EVENT_AFTER_DELETE	= '_after_delete';
 	
+	const JOIN_LEFT				= 1;
+	const JOIN_RIGHT			= 2;
+	const JOIN_INNER			= 3;
+	const JOIN_OUTER			= 4;
+	const JOIN_FULL				= 5;
+	
 	/*  S T A T I C   P R O P E R T I E S */
 	
 	public static $before_save_update = array(
@@ -54,6 +60,21 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		self::EVENT_AFTER_DELETE
 	);
 	
+	/*
+	public static $bundle	= array(
+		'class_name'	=> '',
+		'model'			=> '',
+		'table'			=> '',
+		'primary_key'	=> '',
+		'created_field'	=> '',
+		'updated_field'	=> '',
+		'parent_of'		=> array(),
+		'child_of'		=> array(),
+		'buddy_of'		=> array(),
+		'has_init'		=> false
+	);
+	*/
+	
 	protected static $config = array(
 		'extensions'	=> array()
 	);
@@ -63,7 +84,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	private static $has_init	= FALSE;
 	private static $iter_func	= '';
 	
-	protected static $_fields = array();
+	protected static $_bundles	= array();
+	protected static $_fields	= array();
 	
 	/*
 	 * Every Krak Instance will have a _uid associated with so that the result objects can set the fields
@@ -126,33 +148,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$this->_uid = uniqid('krak_');
 		self::$instances[$this->_uid] = &$this;
 		
-		// set up the default values
-		$this->class_name = get_class($this);
-		
-		if ($this->_model == '')
-		{
-			$lower_class_name = substr(strtolower($this->class_name), MODEL_NS_LEN);
-			$this->_model = str_replace('\\', '_', $lower_class_name);
-		}
-		
-		if ($this->table == '')
-		{
-			$this->table = $this->_model . 's';	// I know, this is shitty, but it'll for most cases and is fast
-		}
-			
-		// if user hasn't already supplied a fields array, then run the query
-		if (property_exists($this, 'fields'))
-		{
-			// 5.2
-			/*$rp = new \ReflectionProperty(get_class($this), 'fields');
-			self::$_fields[$this->_model] = $rp->getValue();*/
-			self::$_fields[$this->_model] = static::$fields;
-		}
-		else
-		{
-			self::$_fields[$this->_model] = $this->db->list_fields($this->table);
-		}
-				
 		// Search for defined event functions to add in the event queue
 		foreach (self::$before_after_all as $func)
 		{
@@ -162,83 +157,148 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			}
 		}
 		
-		// simple default values array
-		$default = array();
-		$index = '';
-		
-		// setup the parent_of relationships
-		foreach ($this->parent_of as $key => $class)
+		// see if user supplied bundle info
+		if (property_exists($this, 'bundle'))
 		{
-			if (is_array($class))
-			{
-				$default['class']		= (isset($class['class']))			? $class['class']		: $key;
-				$default['this_column']	= (isset($class['this_column']))	? $class['this_column']	: $this->_model . '_' . $this->primary_key;
-				$index					= (isset($class['class']))			? $key					: strtolower(str_replace('\\', '_', $key));
-			}
-			else	// must be a string
-			{
-				$default['class']		= $class;
-				$default['this_column']	= $this->_model . '_' . $this->primary_key;
-				$index = strtolower(str_replace('\\', '_', $class));
-			}
-			
-			// unset the current value because we don't use it any more, free up memory
-			unset($this->parent_of[$key]);
-			$this->parent_of[$index] = $default;
+			// 5.2
+			/*$rp = new \ReflectionProperty(get_class($this), 'fields');
+			self::$_fields[$this->_model] = $rp->getValue();*/
+			self::$_bundles[$this->class_name] = new Bundle(static::$bundle);
 		}
 		
-		// reset the vals
-		$default = array();
-		$index = '';
-		
-		// setup the child_of relationships
-		foreach ($this->child_of as $key => $class)
+		// Check if the bundle is already init
+		if (!isset(self::$_bundles[$this->class_name]))
 		{
-			if (is_array($class))
+			// set up the default values
+			$this->class_name = get_class($this);
+		
+			if ($this->_model == '')
 			{
-				$default['class']			= (isset($class['class']))			? $class['class']			: $key;
-				$default['parent_column']	= (isset($class['parent_column']))	? $class['parent_column']	: '';	// will be evaluated when the query is made
-				$index						= (isset($class['class']))			? $key						: strtolower(str_replace('\\', '_', $key));
+				$lower_class_name = substr(strtolower($this->class_name), MODEL_NS_LEN);
+				$this->_model = str_replace('\\', '_', $lower_class_name);
 			}
-			else	// must be a string
+		
+			if ($this->table == '')
 			{
-				$default['class']			= $class;
-				$default['parent_column']	= '';	// will be evaluated when the query is made
-				$index = strtolower(str_replace('\\', '_', $class));
+				$this->table = $this->_model . 's';	// I know, this is shitty, but it'll work for most cases and is fast
+			}
+		
+			// simple default values array
+			$default = array();
+			$index = '';
+		
+			// setup the parent_of relationships
+			foreach ($this->parent_of as $key => $class)
+			{
+				if (is_array($class))
+				{
+					$default['class']		= (isset($class['class']))			? $class['class']		: $key;
+					$default['this_column']	= (isset($class['this_column']))	? $class['this_column']	: $this->_model . '_' . $this->primary_key;
+					$index					= (isset($class['class']))			? $key					: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
+				}
+				else	// must be a string
+				{
+					$default['class']		= $class;
+					$default['this_column']	= $this->_model . '_' . $this->primary_key;
+					$index = substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
+				}
+			
+				// unset the current value because we don't use it any more, free up memory
+				unset($this->parent_of[$key]);
+				$this->parent_of[$index] = $default;
+			}
+		
+			// reset the vals
+			$default = array();
+			$index = '';
+		
+			// setup the child_of relationships
+			foreach ($this->child_of as $key => $class)
+			{
+				if (is_array($class))
+				{
+					$default['class']			= (isset($class['class']))			? $class['class']			: $key;
+					$default['parent_column']	= (isset($class['parent_column']))	? $class['parent_column']	: '';	// will be evaluated when the query is made
+					$index						= (isset($class['class']))			? $key						: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
+				}
+				else	// must be a string
+				{
+					$default['class']			= $class;
+					$default['parent_column']	= '';	// will be evaluated when the query is made
+					$index = substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
+				}
+			
+				// unset the current value because we don't use it any more, free up memory
+				unset($this->child_of[$key]);
+				$this->child_of[$index] = $default;
+			}
+		
+			// reset the vals
+			$default = array();
+			$index = '';
+		
+			// setup the buddy_of relationships
+			foreach ($this->buddy_of as $key => $class)
+			{
+				if (is_array($class))
+				{
+					$default['class']			= (isset($class['class']))			? $class['class']			: $key;
+					$default['this_column']		= (isset($class['this_column']))	? $class['this_column']		: $this->_model . '_' . $this->primary_key;
+					$default['buddy_column']	= (isset($class['buddy_column']))	? $class['buddy_column']	: '';	// will be evaluated when the query is made
+					$default['join_table']		= (isset($class['join_table']))		? $class['join_table']		: '';	// will be evaluated when the query is made
+					$index						= (isset($class['class']))			? $key						: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
+				}
+				else	// must be a string
+				{
+					$default['class']			= $class;
+					$default['this_column']		= $this->_model . '_' . $this->primary_key;
+					$default['buddy_column']	= '';	// will be evaluated when the query is made
+					$default['join_table']		= '';	// will be evaluated when the query is made
+					$index						= substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
+				}
+			
+				// unset the current value because we don't use it any more, free up memory
+				unset($this->buddy_of[$key]);
+				$this->buddy_of[$index] = $default;
 			}
 			
-			// unset the current value because we don't use it any more, free up memory
-			unset($this->child_of[$key]);
-			$this->child_of[$index] = $default;
+			self::$_bundles[$this->class_name] = new Bundle(array(
+				'model'			=> $this->_model,
+				'table'			=> $this->table,
+				'primary_key'	=> $this->primary_key,
+				'created_field'	=> $this->created_field,
+				'updated_field'	=> $this->updated_field,
+				'parent_of'		=> $this->parent_of,
+				'child_of'		=> $this->child_of,
+				'buddy_of'		=> $this->buddy_of,
+			));
+		}
+		else
+		{
+			// set the instance properties
+			$bundle					= self::$_bundles[$this->class_name];
+			$this->class_name		= $bundle['class_name'];
+			$this->_model			= $bundle['model'];
+			$this->table			= $bundle['table'];
+			$this->primary_key		= $bundle['primary_key'];
+			$this->created_field	= $bundle['created_field'];
+			$this->updated_field	= $bundle['updated_field'];
+			$this->parent_of		= $bundle['parent_of'];
+			$this->child_of			= $bundle['child_of'];
+			$this->buddy_of			= $bundle['buddy_of'];
 		}
 		
-		// reset the vals
-		$default = array();
-		$index = '';
-		
-		// setup the buddy_of relationships
-		foreach ($this->buddy_of as $key => $class)
+		// if user hasn't already supplied a fields array, then run the query
+		if (property_exists($this, 'fields'))
 		{
-			if (is_array($class))
-			{
-				$default['class']			= (isset($class['class']))			? $class['class']			: $key;
-				$default['this_column']		= (isset($class['this_column']))	? $class['this_column']		: $this->_model . '_' . $this->primary_key;
-				$default['buddy_column']	= (isset($class['buddy_column']))	? $class['buddy_column']	: '';	// will be evaluated when the query is made
-				$default['join_table']		= (isset($class['join_table']))		? $class['join_table']		: '';	// will be evaluated when the query is made
-				$index						= (isset($class['class']))			? $key						: strtolower(str_replace('\\', '_', $key));
-			}
-			else	// must be a string
-			{
-				$default['class']			= $class;
-				$default['this_column']		= $this->_model . '_' . $this->primary_key;
-				$default['buddy_column']	= '';	// will be evaluated when the query is made
-				$default['join_table']		= '';	// will be evaluated when the query is made
-				$index						= strtolower(str_replace('\\', '_', $class));
-			}
-			
-			// unset the current value because we don't use it any more, free up memory
-			unset($this->buddy_of[$key]);
-			$this->buddy_of[$index] = $default;
+			// 5.2
+			/*$rp = new \ReflectionProperty(get_class($this), 'fields');
+			self::$_fields[$this->_model] = $rp->getValue();*/
+			self::$_fields[$this->class_name] = static::$fields;
+		}
+		else
+		{
+			self::$_fields[$this->class_name] = $this->db->list_fields($this->table);
 		}
 		
 		if ($id !== NULL)
@@ -1157,6 +1217,78 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return ($this->table < $other_table) ? $this->table . '_' . $other_table : $other_table . '_' . $this->table;
 	}
 	
+	/**
+	 * Main Krak joining function.
+	 *
+	 * @param mixed
+	 * @param int
+	 */
+	public function kjoin($model, $join_type)
+	{	
+		// we first need to determine the key for rels array.
+		$key = '';
+				
+		if (is_string($model))
+		{
+			$key = $model;
+		}
+		else if ($model instanceof Model)
+		{
+			$key = self::$_bundles[$model->class_name]['model'];
+		}
+		else if ($model instanceof Bundle)
+		{
+			$key = $model['model'];
+		}
+			
+		$bundle = $this->bundle();
+		$j_type = '';
+		
+		switch ($join_type)
+		{
+			case self::JOIN_LEFT:
+				$j_type = 'LEFT';
+				break;
+			case self::JOIN_RIGHT:
+				$j_type = 'RIGHT';
+				break;
+			case self::JOIN_INNER:
+				$j_type = 'INNER';
+				break;
+			case self::JOIN_FULL:
+				$j_type = 'FULL';
+				break;
+			case self::JOIN_OUTER:
+				$j_type = 'OUTER';
+				break;
+		}
+		
+		if (array_key_exists($key, $this->child_of))
+		{
+			$data = $this->child_of[$key];
+			$o_bundle = call_user_func($data['class'] . '::bundle');
+			$j_clause = "{$o_bundle['table']}.{$o_bundle['primary_key']} = {$this->table}.{$o_bundle['model']}_{$o_bundle['primary_key']}";
+			
+			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
+		}
+		else if (array_key_exists($key, $this->parent_of))
+		{
+			$data = $this->parent_of[$key];
+			$o_bundle = call_user_func($data['class'] . '::bundle');
+			$j_clause = "{$o_bundle['table']}.{$bundle['model']}_{$bundle['primary_key']} = {$this->table}.{$bundle['primary_key']}";
+			
+			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
+		}
+		else if (array_key_exists($key, $this->buddy_of))
+		{
+		
+		}
+		else
+		{
+			throw new Exception("A relationship hasn't been setup between '{$this->class_name}' to '{$key}'");
+		}
+	}
+	
 	public function clear()
 	{
 		foreach ($this->fields() as $field)
@@ -1220,9 +1352,28 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return array();
 	}
 	
-	public function fields()
+	public static function fields()
 	{
-		return self::$_fields[$this->_model];
+		$class = get_called_class();
+		
+		if (!isset(self::$_fields[$class]))
+		{
+			$model = new $class();
+		}
+		
+		return self::$_fields[$class];
+	}
+	
+	public static function bundle()
+	{
+		$class = get_called_class();
+		
+		if (!isset(self::$_bundles[$class]))
+		{
+			$model = new $class();
+		}
+		
+		return self::$_bundles[$class];
 	}
 	
 	/**

@@ -10,6 +10,9 @@ defined('Krak\USER_PATH') || define('Krak\USER_PATH', './application/Krak/');
 $kloader = new Loader('Krak', VENDOR_PATH);
 $kloader->register();
 
+// this file contains all of the "function pointers" for the iterator creation
+$kloader->load('Krak\Iterator\Create');
+
 $mloader = require USER_PATH . 'Autoload.php';
 
 if ($mloader instanceof iLoader == false)
