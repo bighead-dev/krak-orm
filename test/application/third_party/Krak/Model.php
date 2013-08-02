@@ -60,6 +60,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		self::EVENT_AFTER_DELETE
 	);
 	
+	public static $ext_loader = null;
+	
 	/*
 	public static $bundle	= array(
 		'class_name'	=> '',
@@ -133,17 +135,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		$this->db = &$ci->db;
 		
-		if ( ! self::$has_init)
-		{
-			require USER_PATH . 'Config.php';	// this should always be defined
-			self::$config = $config;
-			
-			self::$iter_func = (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
-			$this->_load_extensions();
-			
-			self::$has_init = TRUE;
-		}
-		
 		// setup the _uid
 		$this->_uid = uniqid('krak_');
 		self::$instances[$this->_uid] = &$this;
@@ -193,13 +184,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				if (is_array($class))
 				{
 					$default['class']		= (isset($class['class']))			? $class['class']		: $key;
-					$default['this_column']	= (isset($class['this_column']))	? $class['this_column']	: $this->_model . '_' . $this->primary_key;
+					$default['join_clause']	= (isset($class['join_clause']))	? $class['join_clause']	: '';
 					$index					= (isset($class['class']))			? $key					: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
 				}
 				else	// must be a string
 				{
 					$default['class']		= $class;
-					$default['this_column']	= $this->_model . '_' . $this->primary_key;
+					$default['join_clause']	= '';
 					$index = substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
 				}
 			
@@ -218,13 +209,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				if (is_array($class))
 				{
 					$default['class']			= (isset($class['class']))			? $class['class']			: $key;
-					$default['parent_column']	= (isset($class['parent_column']))	? $class['parent_column']	: '';	// will be evaluated when the query is made
+					$default['join_clause']		= (isset($class['join_clause']))	? $class['join_clause']		: '';	// will be evaluated when the query is made
 					$index						= (isset($class['class']))			? $key						: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
 				}
 				else	// must be a string
 				{
 					$default['class']			= $class;
-					$default['parent_column']	= '';	// will be evaluated when the query is made
+					$default['join_clause']		= '';	// will be evaluated when the query is made
 					$index = substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
 				}
 			
@@ -243,18 +234,14 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				if (is_array($class))
 				{
 					$default['class']			= (isset($class['class']))			? $class['class']			: $key;
-					$default['this_column']		= (isset($class['this_column']))	? $class['this_column']		: $this->_model . '_' . $this->primary_key;
-					$default['buddy_column']	= (isset($class['buddy_column']))	? $class['buddy_column']	: '';	// will be evaluated when the query is made
-					$default['join_table']		= (isset($class['join_table']))		? $class['join_table']		: '';	// will be evaluated when the query is made
+					$default['join_clause']		= (isset($class['join_clause']))	? $class['join_clause']		: array('', '');
 					$index						= (isset($class['class']))			? $key						: substr(strtolower(str_replace('\\', '_', $key)), MODEL_NS_LEN);
 				}
 				else	// must be a string
 				{
-					$default['class']			= $class;
-					$default['this_column']		= $this->_model . '_' . $this->primary_key;
-					$default['buddy_column']	= '';	// will be evaluated when the query is made
-					$default['join_table']		= '';	// will be evaluated when the query is made
-					$index						= substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
+					$default['class']		= $class;
+					$default['join_clause']	= array('', '');	
+					$index					= substr(strtolower(str_replace('\\', '_', $class)), MODEL_NS_LEN);
 				}
 			
 				// unset the current value because we don't use it any more, free up memory
@@ -319,20 +306,34 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return self::$instances[$_uid];
 	}
 	
+	public static function init()
+	{
+		if (!self::$has_init)
+		{
+			require USER_PATH . 'Config.php';	// this should always be defined
+			self::$config = $config;
+			
+			self::$iter_func	= (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
+			self::$ext_loader	= new Loader('Krak\Ext', USER_PATH . 'Ext/');
+			
+			// load the extensions
+			foreach ($config['extensions'] as $extension)
+			{
+				self::load_extension($extension);
+			}
+			
+			self::$has_init = TRUE;
+		}
+	}
+	
 	public static function load_extension($extension)
 	{
-		$path = APPPATH . 'krak/';
-		$file = $path.$extension.'.php';
-		$class = "Krak\\{$extension}";
-		
+		$class = 'Krak\Ext\\' . $extension;
+		$file = self::$ext_loader->load($class, true);
+	
 		if (!file_exists($file))
 		{
-			$file = strtolower($file);
-			
-			if (!file_exists($file))
-			{
-				show_error('Krak Error: loading extension ' . $extension . ': File not found.');
-			}
+			throw new Exception("Loading extension {$extension}: File '{$file}' not found.");
 		}
 		
 		require_once $file;
@@ -348,7 +349,9 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		foreach (self::$before_after_all as $func)
 		{
 			if (method_exists($obj, $func))
+			{
 				$this->add_event_listener(array($obj, $func), $func, FALSE);
+			}
 		}
 
 		// Check which methods can be called on this class, and store in array (method_name => class_name)
@@ -415,42 +418,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		if ($this->last_res !== NULL)
 		{
 			$this->last_res->free_result();
-		}
-	}
-
-	public static function model_autoloader($class, $ret = false)
-	{
-		$file  = '';
-		$namespace = '';
-		
-		if ($last_ns_pos = strrpos($class, '\\'))
-		{
-			$namespace = substr($class, 0, $last_ns_pos);
-			$class = substr($class, $last_ns_pos + 1);
-			$file  = str_replace('\\', DIRECTORY_SEPARATOR, $namespace) . DIRECTORY_SEPARATOR;
-		}
-		// don't convert _'s to directory separators, let's let users have underscores in
-		// their model names
-
-		$path = APPPATH . 'models/' . $file . $class . '.php';
-		
-		if (file_exists($path))
-		{
-			if ($ret == false)
-			{
-				require_once $path;
-			}
-			else
-			{
-				return $path;
-			}
-		}
-		else
-		{
-			if ($ret == true)
-			{
-				return false;
-			}
 		}
 	}
 	
@@ -691,78 +658,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function save($buddy = NULL, $name = '')
 	{	
-		// check to see if we are really trying to save a relation
-		if ($buddy != NULL)
-		{
-			/*
-			 * We don't want to run any more querires than we have to
-			 * if $this is parent, and is saving a bunch of children, then we need
-			 * to run a query for every child to update.
-			 * if $this is a child, and is saving a bunch of parents, then we only need
-			 * to save $this once
-			 */
-			if (is_array($buddy))
-			{
-				$statuses = array();
-				
-				foreach ($buddy as $name => $obj)
-				{
-					if (is_string($name))
-					{
-						$status = $this->save_relation($obj, $data, $name);
-					}
-					else
-					{
-						$status = $this->save_relation($obj, $data);
-					}
-					
-					// if I'm parent, then we need to update child, no matter
-					if ($status == 0)
-					{
-						$obj->save();
-					}
-					
-					$statuses[$status] = TRUE;
-				}
-				
-				if (isset($statuses[1]))
-				{
-					$this->save();
-				}
-				
-				if (isset($statuses[2]))
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			else
-			{
-				$status = $this->save_relation($buddy, $data, $name);
-				
-				// update buddy
-				if ($status == 0)
-				{
-					$buddy->save();
-				}
-				else if ($status == 1) // update this
-				{
-					$this->save();
-				}
-				else if ($status == 2) // update join table
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			
-			return;
-		}
-	
 		/*
 		 * Are we saving or updating?
 		 * if we have already run a get statement and the primary key field exists then we are updating
@@ -923,91 +818,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function delete($buddy = NULL, $name = '')
 	{
-		// check to see if we are really trying to delete a relation
-		if ($buddy != NULL)
-		{
-			/*
-			 * We don't want to run any more querires than we have to
-			 * if $this is parent, and is saving a bunch of children, then we need
-			 * to run a query for every child to update.
-			 * if $this is a child, and is saving a bunch of parents, then we only need
-			 * to save $this once
-			 */
-			if (is_array($buddy))
-			{
-				$statuses = array();
-				
-				foreach ($buddy as $name => $obj)
-				{
-					if (is_string($name))
-					{
-						$status = $this->delete_relation($obj, $data, $name);
-					}
-					else
-					{
-						$status = $this->delete_relation($obj, $data);
-					}
-					
-					// if I'm parent, then we need to update child, no matter
-					if ($status == 0)
-					{
-						$obj->save();
-					}
-					
-					$statuses[$status] = TRUE;
-				}
-				
-				if (isset($statuses[1]))
-				{
-					$this->save();
-				}
-				
-				if (isset($statuses[2]))
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			else
-			{
-				$status = $this->delete_relation($buddy, $data, $name);
-				
-				// update buddy
-				if ($status == 0)
-				{
-					$buddy->save();
-				}
-				else if ($status == 1) // update this
-				{
-					$this->save();
-				}
-				else if ($status == 2) // update join table
-				{		
-					foreach ($data as $table => $save_data)
-					{
-						$where_string = '';
-						
-						foreach ($save_data as $where_data)
-						{
-							$where_string .= '(';
-							
-							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data)) . ' AND ';
-							next($where_data);
-							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data));
-										
-							$where_string .= ') OR ';
-						}
-						
-						$this->db->where(substr($where_string, 0, -4))->delete($table);
-					}
-				}
-			}
-			
-			return;
-		}
-	
 		$this->trigger(self::EVENT_BEFORE_DELETE);
 		$res = FALSE;
 		
@@ -1240,8 +1050,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		{
 			$key = $model['model'];
 		}
-			
-		$bundle = $this->bundle();
+		
 		$j_type = '';
 		
 		switch ($join_type)
@@ -1267,7 +1076,13 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		{
 			$data = $this->child_of[$key];
 			$o_bundle = call_user_func($data['class'] . '::bundle');
-			$j_clause = "{$o_bundle['table']}.{$o_bundle['primary_key']} = {$this->table}.{$o_bundle['model']}_{$o_bundle['primary_key']}";
+			$j_clause = $data['join_clause'];
+			
+			if (!$j_clause)
+			{
+				$j_clause = "{$o_bundle['table']}.{$o_bundle['primary_key']} = {$this->table}.{$o_bundle['model']}_{$o_bundle['primary_key']}";
+				$this->child_of[$key]['join_clause'] = $j_clause;
+			}
 			
 			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
 		}
@@ -1275,18 +1090,69 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		{
 			$data = $this->parent_of[$key];
 			$o_bundle = call_user_func($data['class'] . '::bundle');
-			$j_clause = "{$o_bundle['table']}.{$bundle['model']}_{$bundle['primary_key']} = {$this->table}.{$bundle['primary_key']}";
 			
+			$j_clause = $data['join_clause'];
+			
+			if (!$j_clause)
+			{
+				$j_clause = "{$o_bundle['table']}.{$this->_model}_{$this->primary_key} = {$this->table}.{$this->primary_key}";
+				$this->parent_of[$key]['join_clause'] = $j_clause;
+			}
+	
 			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
 		}
 		else if (array_key_exists($key, $this->buddy_of))
 		{
-		
+			$data		= $this->buddy_of[$key];
+			$o_bundle	= call_user_func($data['class'] . '::bundle');
+			
+			$j_clause = $data['join_clause'];	// for buddy join_clause is an array
+			$jt = $this->get_jt($o_bundle['table']);
+			
+			if (!$j_clause[0])
+			{
+				$j_clause[0] = "{$jt}.{$this->_model}_{$this->primary_key} = {$this->table}.{$this->primary_key}";
+				$this->buddy_of[$key]['join_clause'][0] = $j_clause[0];
+			}
+			
+			if (!$j_clause[1])
+			{
+				$j_clause[1] = "{$jt}.{$o_bundle['model']}_{$o_bundle['primary_key']} = {$o_bundle['table']}.{$o_bundle['primary_key']}";
+				$this->buddy_of[$key]['join_clause'][1] = $j_clause[1];
+			}
+			
+			echo "\$this->db->join('{$jt}', '{$j_clause[0]}', '{$j_type}', false);\n";
+			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause[1]}', '{$j_type}', false);\n";
 		}
 		else
 		{
 			throw new Exception("A relationship hasn't been setup between '{$this->class_name}' to '{$key}'");
 		}
+	}
+	
+	public function ljoin($model)
+	{
+		$this->kjoin($model, self::JOIN_LEFT);
+	}
+	
+	public function rjoin($model)
+	{
+		$this->kjoin($model, self::JOIN_RIGHT);
+	}
+	
+	public function fjoin($model)
+	{
+		$this->kjoin($model, self::JOIN_FULL);
+	}
+	
+	public function ijoin($model)
+	{
+		$this->kjoin($model, self::JOIN_INNER);
+	}
+	
+	public function ojoin($model)
+	{
+		$this->kjoin($model, self::JOIN_OUTER);
 	}
 	
 	public function clear()

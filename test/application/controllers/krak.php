@@ -22,8 +22,9 @@ class Krak extends CI_Controller
 		print_r(\Km\Event::fields());
 		print_r(\Km\Event::bundle());
 		$event = new \Km\Event();
-		$event->kjoin('country', \Krak\Model::JOIN_LEFT);
-		$event->kjoin('event_registration', \Krak\Model::JOIN_RIGHT);
+		$event->ljoin('country');
+		$event->rjoin('event_registration');
+		$event->ijoin('rider');
 		//$this->test_autoload();
 		//$this->test_init();
 		

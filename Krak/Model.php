@@ -658,78 +658,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function save($buddy = NULL, $name = '')
 	{	
-		// check to see if we are really trying to save a relation
-		if ($buddy != NULL)
-		{
-			/*
-			 * We don't want to run any more querires than we have to
-			 * if $this is parent, and is saving a bunch of children, then we need
-			 * to run a query for every child to update.
-			 * if $this is a child, and is saving a bunch of parents, then we only need
-			 * to save $this once
-			 */
-			if (is_array($buddy))
-			{
-				$statuses = array();
-				
-				foreach ($buddy as $name => $obj)
-				{
-					if (is_string($name))
-					{
-						$status = $this->save_relation($obj, $data, $name);
-					}
-					else
-					{
-						$status = $this->save_relation($obj, $data);
-					}
-					
-					// if I'm parent, then we need to update child, no matter
-					if ($status == 0)
-					{
-						$obj->save();
-					}
-					
-					$statuses[$status] = TRUE;
-				}
-				
-				if (isset($statuses[1]))
-				{
-					$this->save();
-				}
-				
-				if (isset($statuses[2]))
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			else
-			{
-				$status = $this->save_relation($buddy, $data, $name);
-				
-				// update buddy
-				if ($status == 0)
-				{
-					$buddy->save();
-				}
-				else if ($status == 1) // update this
-				{
-					$this->save();
-				}
-				else if ($status == 2) // update join table
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			
-			return;
-		}
-	
 		/*
 		 * Are we saving or updating?
 		 * if we have already run a get statement and the primary key field exists then we are updating
@@ -890,91 +818,6 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function delete($buddy = NULL, $name = '')
 	{
-		// check to see if we are really trying to delete a relation
-		if ($buddy != NULL)
-		{
-			/*
-			 * We don't want to run any more querires than we have to
-			 * if $this is parent, and is saving a bunch of children, then we need
-			 * to run a query for every child to update.
-			 * if $this is a child, and is saving a bunch of parents, then we only need
-			 * to save $this once
-			 */
-			if (is_array($buddy))
-			{
-				$statuses = array();
-				
-				foreach ($buddy as $name => $obj)
-				{
-					if (is_string($name))
-					{
-						$status = $this->delete_relation($obj, $data, $name);
-					}
-					else
-					{
-						$status = $this->delete_relation($obj, $data);
-					}
-					
-					// if I'm parent, then we need to update child, no matter
-					if ($status == 0)
-					{
-						$obj->save();
-					}
-					
-					$statuses[$status] = TRUE;
-				}
-				
-				if (isset($statuses[1]))
-				{
-					$this->save();
-				}
-				
-				if (isset($statuses[2]))
-				{
-					foreach ($data as $table => $save_data)
-					{
-						$this->insert_batch($save_data, $table);
-					}
-				}
-			}
-			else
-			{
-				$status = $this->delete_relation($buddy, $data, $name);
-				
-				// update buddy
-				if ($status == 0)
-				{
-					$buddy->save();
-				}
-				else if ($status == 1) // update this
-				{
-					$this->save();
-				}
-				else if ($status == 2) // update join table
-				{		
-					foreach ($data as $table => $save_data)
-					{
-						$where_string = '';
-						
-						foreach ($save_data as $where_data)
-						{
-							$where_string .= '(';
-							
-							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data)) . ' AND ';
-							next($where_data);
-							$where_string .= key($where_data) . ' = ' . $this->db->escape(current($where_data));
-										
-							$where_string .= ') OR ';
-						}
-						
-						$this->db->where(substr($where_string, 0, -4))->delete($table);
-					}
-				}
-			}
-			
-			return;
-		}
-	
 		$this->trigger(self::EVENT_BEFORE_DELETE);
 		$res = FALSE;
 		
@@ -1237,7 +1080,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			if (!$j_clause)
 			{
-				$j_clause = ($data['join_clause']) ? $data['join_clause'"{$o_bundle['table']}.{$o_bundle['primary_key']} = {$this->table}.{$o_bundle['model']}_{$o_bundle['primary_key']}";
+				$j_clause = "{$o_bundle['table']}.{$o_bundle['primary_key']} = {$this->table}.{$o_bundle['model']}_{$o_bundle['primary_key']}";
 				$this->child_of[$key]['join_clause'] = $j_clause;
 			}
 			
