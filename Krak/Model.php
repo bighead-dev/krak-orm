@@ -1084,7 +1084,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$this->child_of[$key]['join_clause'] = $j_clause;
 			}
 			
-			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
+			$this->db->join($o_bundle['table'], $j_clause, $j_type, false);
 		}
 		else if (array_key_exists($key, $this->parent_of))
 		{
@@ -1099,7 +1099,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$this->parent_of[$key]['join_clause'] = $j_clause;
 			}
 	
-			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause}', '{$j_type}', false);\n";
+			$this->db->join($o_bundle['table'], $j_clause, $j_type, false);
 		}
 		else if (array_key_exists($key, $this->buddy_of))
 		{
@@ -1121,38 +1121,40 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$this->buddy_of[$key]['join_clause'][1] = $j_clause[1];
 			}
 			
-			echo "\$this->db->join('{$jt}', '{$j_clause[0]}', '{$j_type}', false);\n";
-			echo "\$this->db->join('{$o_bundle['table']}', '{$j_clause[1]}', '{$j_type}', false);\n";
+			$this->db->join($jt, $j_clause[0], $j_type, false);
+			$this->db->join($o_bundle['table'], $j_clause[1], $j_type, false);
 		}
 		else
 		{
 			throw new Exception("A relationship hasn't been setup between '{$this->class_name}' to '{$key}'");
 		}
+		
+		return $this;
 	}
 	
 	public function ljoin($model)
 	{
-		$this->kjoin($model, self::JOIN_LEFT);
+		return $this->kjoin($model, self::JOIN_LEFT);
 	}
 	
 	public function rjoin($model)
 	{
-		$this->kjoin($model, self::JOIN_RIGHT);
+		return $this->kjoin($model, self::JOIN_RIGHT);
 	}
 	
 	public function fjoin($model)
 	{
-		$this->kjoin($model, self::JOIN_FULL);
+		return $this->kjoin($model, self::JOIN_FULL);
 	}
 	
 	public function ijoin($model)
 	{
-		$this->kjoin($model, self::JOIN_INNER);
+		return $this->kjoin($model, self::JOIN_INNER);
 	}
 	
 	public function ojoin($model)
 	{
-		$this->kjoin($model, self::JOIN_OUTER);
+		return $this->kjoin($model, self::JOIN_OUTER);
 	}
 	
 	public function clear()
