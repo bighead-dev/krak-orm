@@ -1244,6 +1244,21 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return self::$_bundles[$class];
 	}
 	
+	public function table()
+	{
+		return $this->table;
+	}
+	
+	public function model()
+	{
+		return $this->model;
+	}
+	
+	public function obj()
+	{
+		return (object) get_object_vars($this);
+	}
+	
 	/**
 	 * Creates an array that actually gets inserted and updated.
 	 * Only keys that are apart $this->fields should be sent to
