@@ -9,32 +9,50 @@ namespace Krak;
  */
 class Bundle implements \ArrayAccess
 {
-	private $data = array();
-	
+	public $class_name;
+	public $model;
+	public $table;
+	public $primary_key;
+	public $created_field;
+	public $updated_field;
+	public $parent_of;
+	public $child_of;
+	public $buddy_of;
+	public $event_queues;
+
 	public function __construct($data)
-	{
-		$this->data = &$data;
+	{		
+		$this->class_name		= &$data['class_name'];
+		$this->model			= &$data['model'];
+		$this->table			= &$data['table'];
+		$this->primary_key		= &$data['primary_key'];
+		$this->created_field	= &$data['created_field'];
+		$this->updated_field	= &$data['updated_field'];
+		$this->parent_of		= &$data['parent_of'];
+		$this->child_of			= &$data['child_of'];
+		$this->buddy_of			= &$data['buddy_of'];
+		$this->event_queues		= &$data['event_queues'];
 	}
 	
 	/* Array Access Methods */
 	
 	public function offsetExists($index)
 	{
-		return array_key_exists($this->data[$index]);
+		return property_exists($this, $index);
 	}
 	
 	public function offsetGet($index)
 	{
-		return $this->data[$index];
+		return $this->{$index};
 	}
 	
 	public function offsetSet($index, $value)
 	{
-		$this->data[$index] = $value;
+		$this->{$index} = $value;
 	}
 	
 	public function offsetUnset($index)
 	{
-		unset($this->data[$index]);
+		unset($this->{$index});
 	}
 }

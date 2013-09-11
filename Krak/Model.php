@@ -60,7 +60,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		self::EVENT_AFTER_DELETE
 	);
 	
-	public static $ext_loader = null;
+	public static $ext_loader	= null;
+	public static $model_loader	= null;
 	
 	/*
 	public static $bundle	= array(
@@ -137,31 +138,22 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		
 		// setup the _uid
 		$this->_uid = uniqid('krak_');
-		self::$instances[$this->_uid] = &$this;
+		self::$instances[$this->_uid] = $this;
 		
-		// Search for defined event functions to add in the event queue
-		foreach (self::$before_after_all as $func)
-		{
-			if (method_exists($this, $func))
-			{
-				$this->add_event_listener(array($this, $func), $func, FALSE);
-			}
-		}
+		$this->class_name = get_class($this);
 		
 		// see if user supplied bundle info
-		if (property_exists($this, 'bundle'))
-		{
+		if (!isset(self::$_bundles[$this->class_name]) && property_exists($this, 'bundle'))
+		{	
 			// 5.2
 			/*$rp = new \ReflectionProperty(get_class($this), 'fields');
 			self::$_fields[$this->_model] = $rp->getValue();*/
 			self::$_bundles[$this->class_name] = new Bundle(static::$bundle);
+			$this->init_from_bundle();
 		}
-		
-		// Check if the bundle is already init
-		if (!isset(self::$_bundles[$this->class_name]))
+		else if (!isset(self::$_bundles[$this->class_name]))
 		{
 			// set up the default values
-			$this->class_name = get_class($this);
 		
 			if ($this->_model == '')
 			{
@@ -249,43 +241,48 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$this->buddy_of[$index] = $default;
 			}
 			
+			// Search for defined event functions to add in the event queue
+			foreach (self::$before_after_all as $func)
+			{
+				if (method_exists($this, $func))
+				{
+					$this->add_event_listener(array($this, $func), $func, FALSE);
+				}
+			}
+			
+			// Now we're going to cache this data in a bundle for later use
 			self::$_bundles[$this->class_name] = new Bundle(array(
-				'model'			=> $this->_model,
-				'table'			=> $this->table,
-				'primary_key'	=> $this->primary_key,
-				'created_field'	=> $this->created_field,
-				'updated_field'	=> $this->updated_field,
-				'parent_of'		=> $this->parent_of,
-				'child_of'		=> $this->child_of,
-				'buddy_of'		=> $this->buddy_of,
+				'class_name'	=> &$this->class_name,
+				'model'			=> &$this->_model,
+				'table'			=> &$this->table,
+				'primary_key'	=> &$this->primary_key,
+				'created_field'	=> &$this->created_field,
+				'updated_field'	=> &$this->updated_field,
+				'parent_of'		=> &$this->parent_of,
+				'child_of'		=> &$this->child_of,
+				'buddy_of'		=> &$this->buddy_of,
+				'event_queues'	=> &$this->event_queues
 			));
 		}
 		else
 		{
-			// set the instance properties
-			$bundle					= self::$_bundles[$this->class_name];
-			$this->class_name		= $bundle['class_name'];
-			$this->_model			= $bundle['model'];
-			$this->table			= $bundle['table'];
-			$this->primary_key		= $bundle['primary_key'];
-			$this->created_field	= $bundle['created_field'];
-			$this->updated_field	= $bundle['updated_field'];
-			$this->parent_of		= $bundle['parent_of'];
-			$this->child_of			= $bundle['child_of'];
-			$this->buddy_of			= $bundle['buddy_of'];
+			$this->init_from_bundle();
 		}
 		
-		// if user hasn't already supplied a fields array, then run the query
-		if (property_exists($this, 'fields'))
+		if (!isset(self::$_fields[$this->class_name]))
 		{
-			// 5.2
-			/*$rp = new \ReflectionProperty(get_class($this), 'fields');
-			self::$_fields[$this->_model] = $rp->getValue();*/
-			self::$_fields[$this->class_name] = static::$fields;
-		}
-		else
-		{
-			self::$_fields[$this->class_name] = $this->db->list_fields($this->table);
+			// if user hasn't already supplied a fields array, then run the query
+			if (property_exists($this, 'fields'))
+			{
+				// 5.2
+				/*$rp = new \ReflectionProperty(get_class($this), 'fields');
+				self::$_fields[$this->_model] = $rp->getValue();*/
+				self::$_fields[$this->class_name] = static::$fields;
+			}
+			else
+			{
+				self::$_fields[$this->class_name] = $this->db->list_fields($this->table);
+			}	
 		}
 		
 		if ($id !== NULL)
@@ -306,7 +303,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return self::$instances[$_uid];
 	}
 	
-	public static function init()
+	public static function init(\Krak\iLoader $mloader)
 	{
 		if (!self::$has_init)
 		{
@@ -315,6 +312,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 			
 			self::$iter_func	= (isset(self::$config['iterator'])) ? self::$config['iterator'] : self::ITERATOR_BUFFERED;
 			self::$ext_loader	= new Loader('Krak\Ext', USER_PATH . 'Ext/');
+			self::$model_loader	= $mloader;
 			
 			// load the extensions
 			foreach ($config['extensions'] as $extension)
@@ -1179,20 +1177,8 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 	
 	public function get_krak_bundle()
 	{
-		$b					= new Bundle();
-		$b->table			= &$this->table;
-		$b->_model			= &$this->_model;
-		$b->class_name		= &$this->class_name;
-		
-		// indirect modification error if the next two props are assigned by ref
-		$b->parent_of		= &$this->parent_of;
-		$b->child_of		= &$this->child_of;
-		$b->buddy_of		= &$this->buddy_of;
-		
-		$b->primary_key		= &$this->primary_key;
-		$b->created_field	= &$this->created_field;
-		$b->updated_field	= &$this->updated_field;
-		return $b;
+		$class = get_called_class();
+		return self::$_bundles[$class];
 	}
 	
 	public function num_rows()
@@ -1273,6 +1259,21 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 				$krak_data[$field] = &$this->{$field};
 			}
 		}
+	}
+	
+	private function init_from_bundle()
+	{
+		// set the instance properties
+		$bundle					= self::$_bundles[$this->class_name];
+		$this->_model			= &$bundle->_model;
+		$this->table			= &$bundle->table;
+		$this->primary_key		= &$bundle->primary_key;
+		$this->created_field	= &$bundle->created_field;
+		$this->updated_field	= &$bundle->updated_field;
+		$this->parent_of		= &$bundle->parent_of;
+		$this->child_of			= &$bundle->child_of;
+		$this->buddy_of			= &$bundle->buddy_of;
+		$this->event_queues		= &$bundle->event_queues;
 	}
 	
 	private function trigger($event)

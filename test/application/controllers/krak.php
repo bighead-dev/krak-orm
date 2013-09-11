@@ -19,12 +19,11 @@ class Krak extends CI_Controller
 		
 		//$rider = new \Km\Rider();
 		//$event = new \Km\Event();
-		print_r(\Km\Event::fields());
-		print_r(\Km\Event::bundle());
+		//print_r(\Km\Event::fields());
+		//print_r(\Km\Event::bundle());
 		$event = new \Km\Event();
-		$event->ljoin('country');
-		$event->rjoin('event_registration');
-		$event->ijoin('rider');
+		\Krak\Model::load_extension('Compile');
+		$event->compile_data();
 		//$this->test_autoload();
 		//$this->test_init();
 		
