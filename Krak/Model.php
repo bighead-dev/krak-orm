@@ -1276,7 +1276,7 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$this->event_queues		= &$bundle->event_queues;
 	}
 	
-	private function trigger($event)
+	protected function trigger($event)
 	{
 		if (isset($this->event_queues[$event]))
 		{
