@@ -1,6 +1,6 @@
 {
     "name": "bighead-dev/krak",
-    "description": "Very simple ORM wrapper around docrine's DBAL",
+    "description": "Very simple ORM wrapper around fluentPDO",
     "keywords": [],
     "type": "library",
     "license": "MIT",
@@ -13,7 +13,7 @@
     "require":
             {
                 "php": ">=5.4.0",
-                "doctrine/dbal": "2.5.*@dev"
+                "lichtner/fluentpdo": "dev-master" 
             },
     "autoload":
             {
