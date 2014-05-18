@@ -1,0 +1,23 @@
+{
+    "name": "bighead-dev/krak",
+    "description": "Very simple ORM wrapper around docrine's DBAL",
+    "keywords": [],
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/bighead-dev/krak-orm/blob/doctrine/README.md",
+    "authors": [
+        {
+            "name": "Bighead Technology",
+        }
+    ],
+    "require":
+            {
+                "php": ">=5.4.0",
+                "doctrine/dbal": "2.5.*@dev"
+            },
+    "autoload":
+            {
+                "files" : ["lib/Krak/Autoload.php"]
+            },
+    "minimum-stability": "dev"
+}
