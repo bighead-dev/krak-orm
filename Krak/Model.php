@@ -654,6 +654,14 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		return $this;
 	}
 	
+	public function set_data($data)
+	{
+	    foreach ($data as $key => $val){
+	        $this->{$key} = $val;
+	    }
+	    return $this;
+	}
+	
 	public function save($buddy = NULL, $name = '')
 	{	
 		/*
@@ -670,13 +678,11 @@ abstract class Model implements \IteratorAggregate, \ArrayAccess, \Countable
 		$this->trigger(self::EVENT_BEFORE_SAVE);
 		$res = FALSE;
 		
-		if ($this->created_field !== '')
-		{
+		if ($this->created_field !== '') {
 			$this->{$this->created_field} = date('Y-m-d H:i:s', time());
 		}
 			
-		if ($this->updated_field !== '')
-		{
+		if ($this->updated_field !== '') {
 			$this->{$this->updated_field} = date('Y-m-d H:i:s', time());
 		}
 		

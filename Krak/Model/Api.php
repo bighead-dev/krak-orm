@@ -40,6 +40,16 @@ abstract class Api extends \Krak\Model
         return $cur_fields;
     }
 
+    public function api_docs()
+    {
+        return [
+            'valid_fields'  => array_keys(static::$api_fields),
+            'valid_wheres'  => array_keys(static::$api_wheres),
+            'valid_sorts'   => array_keys(static::$api_sorts),
+            'related_eps'   => array_keys(static::$api_rel_ep),
+        ];
+    }
+
     public function api_build_params_from_input($input)
     {
         $this->trigger(self::API_EVENT_PRE_BUILD_FIELDS);
@@ -72,6 +82,10 @@ abstract class Api extends \Krak\Model
         }
     
         static::api_build_joins($this->db, $this->api_join_set);
+        
+        /* some of the related endpoints might need to make joins also */
+        $this->build_rel_ep_joins();
+        
         return $this;
     }
 
@@ -81,58 +95,6 @@ abstract class Api extends \Krak\Model
             ->api_build_query();
             
         return $this;
-    }
-    
-    public function api_build_result()
-    {
-        $result = [];
-        
-        $res = $this->get();
-
-        foreach ($this as $obj)
-        {
-            $cur_data = static::api_build_partial_result($this->api_cur_fields['self'], $obj);
-            
-            foreach (static::$api_rel_ep as $ep => $class)
-            {
-                if (!array_key_exists($ep, $this->api_cur_fields)) {
-                    continue;
-                }
-                
-                $cur_data[$ep] = $class::api_build_partial_result($this->api_cur_fields[$ep], $obj);
-            }
-            
-            $result[] = $cur_data;
-        }
-        
-        return $result;
-    }
-    
-    public function api_build_indexed_result(&$ids)
-    {
-        $result = [];
-        $ids    = [];
-        
-        $res = $this->get();
-
-        foreach ($this as $obj)
-        {
-            $cur_data = static::api_build_partial_result($this->api_cur_fields['self'], $obj);
-            
-            foreach (static::$api_rel_ep as $ep => $class)
-            {
-                if (!array_key_exists($ep, $this->api_cur_fields)) {
-                    continue;
-                }
-                
-                $cur_data[$ep] = $class::api_build_partial_result($this->api_cur_fields[$ep], $obj);
-            }
-            
-            $ids[] = $cur_data['id'];
-            $result[$cur_data['id']] = $cur_data;
-        }
-        
-        return $result;
     }
     
     private function build_cur_fields_from_input($input)
@@ -182,6 +144,84 @@ abstract class Api extends \Krak\Model
         }
         
         $this->api_cur_fields = $cur_fields;
+    }
+    
+    private function build_fields_from_cur_fields()
+    {
+        /* the fields are stored as field => sql partial select, so to pass the fields into 
+           the api partial build result method, we need to get the array keys of the cur_fields */
+        $fields = [
+            'self' => array_keys($this->api_cur_fields['self'])
+        ];
+        
+        /* grab the fields from related endpoints */
+        foreach (static::$api_rel_ep as $ep => $class)
+        {
+            if (!array_key_exists($ep, $this->api_cur_fields)) {
+                continue;
+            }
+            
+            $fields[$ep] = array_keys($this->api_cur_fields[$ep]);
+        }
+        
+        return $fields;
+    }
+    
+    public function api_build_result()
+    {
+        $result = [];
+        
+        $res = $this->get();
+
+        $fields = $this->build_fields_from_cur_fields();
+    
+        /* loop over the result set */
+        foreach ($this as $obj)
+        {
+            $cur_data = static::api_build_partial_result($fields['self'], $obj);
+            
+            foreach (static::$api_rel_ep as $ep => $class)
+            {
+                if (!array_key_exists($ep, $this->api_cur_fields)) {
+                    continue;
+                }
+                
+                $cur_data[$ep] = $class::api_build_partial_result($fields[$ep], $obj);
+            }
+            
+            $result[] = $cur_data;
+        }
+        
+        return $result;
+    }
+    
+    public function api_build_indexed_result(&$ids)
+    {
+        $result = [];
+        $ids    = [];
+        
+        $res = $this->get();
+        
+        $fields = $this->build_fields_from_cur_fields();
+
+        foreach ($this as $obj)
+        {
+            $cur_data = static::api_build_partial_result($fields['self'], $obj);
+            
+            foreach (static::$api_rel_ep as $ep => $class)
+            {
+                if (!array_key_exists($ep, $this->api_cur_fields)) {
+                    continue;
+                }
+                
+                $cur_data[$ep] = $class::api_build_partial_result($fields[$ep], $obj);
+            }
+            
+            $ids[] = $cur_data['id'];
+            $result[$cur_data['id']] = $cur_data;
+        }
+        
+        return $result;
     }
 
     private function build_sort_map_from_input($input)
@@ -250,6 +290,47 @@ abstract class Api extends \Krak\Model
         $this->api_where_map = $wm;
     }
     
+    private function append_to_set(&$set, $vals)
+    {
+        if (is_array($vals))
+        {
+            foreach ($vals as $val) {
+                $set[$val] = null;
+            }
+        }
+        else {
+            $set[$vals] = null;
+        }
+    }
+    
+    private function build_rel_ep_joins()
+    {
+        foreach ($this->api_cur_fields as $ep => $cur_fields)
+        {
+            if ($ep == 'self') {
+                continue; /* don't worry about ourselves */
+            }
+            
+            $js = [];
+            
+            /* grab the related ep class name */
+            $class = static::$api_rel_ep[$ep];
+            
+            /* loop over the related endpoints fields and see if any of the related endpoints
+               fields require a join. If so, then add to the join set */
+            foreach ($cur_fields as $key => $val)
+            {
+                if (array_key_exists($key, $class::$api_joins)) {
+                    $this->append_to_set($js, $class::$api_joins[$key]);
+                }
+            }
+            
+            /* now the join set should be built with all of the necessary joins for the
+               related ep, so let's actually build the joins */
+            $class::api_build_joins($this->db, $js);
+        }
+    }
+    
     private function build_join_set()
     {
         $js = []; /* join set */
@@ -266,7 +347,7 @@ abstract class Api extends \Krak\Model
         foreach ($this->api_cur_fields as $key => $val)
         {
             if (array_key_exists($key, static::$api_joins)) {
-                $js[static::$api_joins[$key]] = null;
+                $this->append_to_set($js, static::$api_joins[$key]);
             }
         }
         
@@ -274,7 +355,7 @@ abstract class Api extends \Krak\Model
         foreach ($this->api_cur_fields['self'] as $key => $val)
         {
             if (array_key_exists($key, static::$api_joins)) {
-                $js[static::$api_joins[$key]] = null;
+                $this->append_to_set($js, static::$api_joins[$key]);
             }
         }
         
@@ -282,7 +363,7 @@ abstract class Api extends \Krak\Model
         foreach ($this->api_where_map as $key => $val)
         {
             if (array_key_exists($key, static::$api_joins)) {
-                $js[static::$api_joins[$key]] = null;
+                $this->append_to_set($js, static::$api_joins[$key]);
             }
         }
         
@@ -290,7 +371,7 @@ abstract class Api extends \Krak\Model
         foreach ($this->api_sort_map as $key => $val)
         {
             if (array_key_exists($key, static::$api_joins)) {
-                $js[static::$api_joins[$key]] = null;
+                $this->append_to_set($js, static::$api_joins[$key]);
             }
         }
         
@@ -384,7 +465,7 @@ abstract class Api extends \Krak\Model
         return substr($order, 0, -2);
     }
     
-    /* these need to be defined by the base class */
+    /* these need to be defined by the inheriting class */
     abstract public function api_process_where_value($key, $val);
     public static function api_build_joins($db, $js) {
         throw new \Krak\Exception('api_build_joins needs to be implemented');
