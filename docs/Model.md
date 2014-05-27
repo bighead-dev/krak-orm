@@ -80,7 +80,7 @@ $user_m->delete();
 All of the above methods will delete the user with ID 5. The delete method only looks for the primary key (id) in the current object, and then runs a delete query with that id. Example just shows creating an object then manually setting the primary key and running delete. There are no select queries. The second and third show a way to query the database to get that user and then delete the queried user.
 
 *Set*
-````
+````php
 $user_m = new Km\User();
 $user_m->where('id > ', 9)->delete_set(); /* this deletes all users greater than 9 */
 ````
