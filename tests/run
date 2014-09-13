@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Simple script for running php tests
+ */
+
+
+function get_test_class($argc, $argv)
+{
+    if ($argc < 2) {
+        printf("usage: %s TestClass {args}\n", $argv[0]); exit;
+    }
+    
+    return 'Krak\Tests\\' . $argv[1];
+}
+
+
+function main($argc, $argv)
+{
+    require_once __DIR__ . '/../vendor/autoload.php';
+    
+    /* build the loader */
+    $test_loader = new \Doctrine\Common\ClassLoader('Krak\Tests', __DIR__);
+    $test_loader->register();
+    
+    /* get the test class */
+    $cls = get_test_class($argc, $argv);
+        
+    /* does the class exist? */
+    if (!$test_loader->canLoadClass($cls)) {
+        printf("Test '%s' does not exist\n", $cls); exit;
+    }
+    
+    $test = new $cls();
+    
+    /* is it a test? */
+    if ($test instanceof Krak\Tests\Test == false) {
+        printf("Test '%s' not an instance of Krak\Tests\Test\n", $cls); exit;
+    }
+    
+    /* call the test */
+    $test->main(array_slice($argv, 2));
+    
+    /* clean up */
+    $test_loader->unregister();
+}
+
+main($argc, $argv);
