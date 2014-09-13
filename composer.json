@@ -1,23 +1,28 @@
 {
-    "name": "bighead-dev/krak",
-    "description": "Very simple ORM wrapper around fluentPDO",
-    "keywords": [],
+    "name": "krak/orm",
+    "description": "Simple DataMapper ORM",
     "type": "library",
     "license": "MIT",
-    "homepage": "https://github.com/bighead-dev/krak-orm/blob/doctrine/README.md",
+    "homepage": "https://github.com/bighead-dev/krak-orm",
+    "keywords": [
+        "datamapper",
+        "orm",
+        "model",
+    ],
     "authors": [
         {
-            "name": "Bighead Technology",
+            "name": "RJ Garcia",
+            "email": "rj@bighead.net"
         }
     ],
-    "require":
-            {
-                "php": ">=5.4.0",
-                "lichtner/fluentpdo": "dev-master" 
-            },
-    "autoload":
-            {
-                "files" : ["lib/Krak/Autoload.php"]
-            },
+    "require": {
+        "php": ">=5.5.0",
+    },
+    "autoload": {
+        "psr-4": {
+            "Krak\Orm\\" : "lib"
+        }
+        "files" : ["lib/functions.php"]
+    },
     "minimum-stability": "dev"
 }
