@@ -1,12 +1,13 @@
 <?php
 
-namespace Krak\Tests\ClassMeta;
+namespace Krak\Tests\Db\ClassMeta;
 
 use Krak\Orm;
+use Krak\Tests\KrakTestCase;
 
-class BuilderTest implements \Krak\Tests\Test
+class BuilderTest extends KrakTestCase
 {
-    public function main($argv)
+    public function testSimple()
     {
         $builder = new Orm\Driver\Db\ClassMetaBuilder();
         
@@ -16,6 +17,12 @@ class BuilderTest implements \Krak\Tests\Test
             ->addField('data', Orm\Types::STR, 'DataField')
             ->build();
         
-        print_r($meta);
+        //print_r($meta);
+        $this->assertEquals(true, true);
+    }
+    
+    public function testBad()
+    {
+        $this->assertEquals(1, 0);
     }
 }
