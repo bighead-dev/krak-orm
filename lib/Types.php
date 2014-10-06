@@ -7,10 +7,11 @@ namespace Krak\Orm;
  */
 class Types
 {
-    const STR       = 0x1;
-    const BOOL      = 0x2;
-    const INT       = 0x3;
-    const FLOAT     = 0x4;
-    const DATETIME  = 0x5;
-    const MODEL     = 0x6;
+    const STR           = 1;
+    const BOOL          = 2;
+    const INT           = 3;
+    const FLOAT         = 4;
+    const DATETIME      = 5;
+    const MODEL         = 6;
+    const COLLECTION    = 7;
 }

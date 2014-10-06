@@ -1,6 +1,6 @@
 <?php
 
-namespace Krak\Orm\Driver\Db;
+namespace Krak\Orm\ClassMeta\Db;
 
 /**
  * Field Meta Data
