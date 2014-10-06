@@ -1,7 +1,5 @@
 <?php
 
-use Traversable;
-
 /**
  * Can an object be traversed?
  */
